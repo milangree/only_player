@@ -1,10 +1,8 @@
-- 新增“恢复文件夹内上次播放媒体”开关，重新进入本地与 WebDAV 目录时会自动定位到上次实际播放的视频，目录顺序变化后也会优先定位同一媒体
-- 优化云端目录浏览，进入子目录后返回可保留原列表位置，并支持下拉刷新当前目录
+- 修复 WebDAV 文件夹播放未应用全局默认倍速的问题，视频内临时调整倍速后仅在当前播放队列内继承，退出后会恢复全局设置
 
 <details>
 <summary>English Version</summary>
 
-- Add a "restore last played media in folders" option that jumps back to the last actually played video in local and WebDAV folders, even after directory ordering changes
-- Improve cloud directory browsing by preserving the previous list position when returning from subdirectories and adding pull-to-refresh for the current directory
+- Fix WebDAV folder playback not applying the global default speed, while temporary in-player speed changes are only inherited within the current queue and reset to the global setting after exit
 
 </details>
