@@ -405,7 +405,14 @@ internal fun MediaPickerScreen(
                     selectionManager.clearSelection()
                 },
                 onDeleteAction = {
-                    shouldShowDeleteVideosConfirmation = true
+                    val allUris = selectionManager.allSelectedVideos.map { it.uriString }
+                    val hasLocalFileUri = allUris.any { it.startsWith("file:") }
+                    if (deleteAction == MediaPickerDeleteAction.PermanentlyDelete && !hasLocalFileUri) {
+                        onEvent(MediaPickerUiEvent.PermanentlyDeleteVideos(allUris))
+                        selectionManager.exitSelectionMode()
+                    } else {
+                        shouldShowDeleteVideosConfirmation = true
+                    }
                 },
                 onExcludeAction = {
                     val paths = selectionManager.selectedFolders.map { it.path }
