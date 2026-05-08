@@ -155,6 +155,7 @@ internal fun MediaPlayerScreen(
     val volumeState = rememberVolumeState(
         player = player,
         shouldShowVolumePanelIfHeadsetIsOn = playerPreferences.shouldShowSystemVolumePanel,
+        isVolumeBoostEnabled = playerPreferences.isVolumeBoostEnabled,
     )
     player ?: return
     val metadataState = rememberMetadataState(player)
@@ -218,11 +219,20 @@ internal fun MediaPlayerScreen(
         if (playerPreferences.shouldRememberPlayerBrightness) {
             brightnessState.setBrightness(playerPreferences.playerBrightness)
         }
+        if (playerPreferences.shouldRememberPlayerVolume) {
+            volumeState.updateVolumePercentage(playerPreferences.playerVolumePercentage)
+        }
     }
 
     LaunchedEffect(brightnessState.currentBrightness) {
         if (playerPreferences.shouldRememberPlayerBrightness) {
             viewModel.updatePlayerBrightness(brightnessState.currentBrightness)
+        }
+    }
+
+    LaunchedEffect(volumeState.volumePercentage) {
+        if (playerPreferences.shouldRememberPlayerVolume) {
+            viewModel.updatePlayerVolume(volumeState.volumePercentage)
         }
     }
 

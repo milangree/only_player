@@ -245,7 +245,7 @@ class PlayerService : MediaSessionService() {
     private var isMediaItemReady = false
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var currentVolumeGain: Int = 0
+    private var requestedVolumeGain: Int = 0
     private val mediaParserRetried = mutableSetOf<String>()
     private var isPendingExternalSubAutoSelect = false
     private var assHandler: AssHandler? = null
@@ -656,16 +656,19 @@ class PlayerService : MediaSessionService() {
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             super.onAudioSessionIdChanged(audioSessionId)
-            if (!playerPreferences.isVolumeBoostEnabled) return
+            if (!playerPreferences.canUseLoudnessEnhancer) return
             if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
             try {
                 loudnessEnhancer?.release()
                 loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                if (currentVolumeGain > 0) {
-                    setEnhancerTargetGain(currentVolumeGain)
-                }
+                Logger.debug(
+                    TAG,
+                    "Loudness enhancer initialized: normalization=${playerPreferences.isVolumeNormalizationEnabled}, " +
+                        "boost=${playerPreferences.isVolumeBoostEnabled}",
+                )
+                applyLoudnessEnhancerGain()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Logger.error(TAG, "Failed to initialize loudness enhancer", e)
                 loudnessEnhancer = null
             }
         }
@@ -956,16 +959,32 @@ class PlayerService : MediaSessionService() {
     }
 
     private fun setEnhancerTargetGain(gain: Int) {
+        requestedVolumeGain = gain.coerceAtLeast(0)
+        applyLoudnessEnhancerGain()
+    }
+
+    private fun applyLoudnessEnhancerGain() {
         val enhancer = loudnessEnhancer ?: return
+        val gain = requestedVolumeGain + playerPreferences.normalizationGain
 
         try {
             enhancer.setTargetGain(gain)
             enhancer.enabled = gain > 0
-            currentVolumeGain = enhancer.targetGain.toInt()
+            Logger.debug(
+                TAG,
+                "Apply loudness gain: requested=$requestedVolumeGain, normalization=${playerPreferences.normalizationGain}, " +
+                    "target=$gain, enabled=${gain > 0}",
+            )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.error(TAG, "Failed to apply loudness enhancer gain", e)
         }
     }
+
+    private val PlayerPreferences.canUseLoudnessEnhancer: Boolean
+        get() = isVolumeBoostEnabled || isVolumeNormalizationEnabled
+
+    private val PlayerPreferences.normalizationGain: Int
+        get() = if (isVolumeNormalizationEnabled) PlayerPreferences.VOLUME_NORMALIZATION_GAIN_MB else 0
 
     private val mediaSessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -1108,7 +1127,7 @@ class PlayerService : MediaSessionService() {
                     return@future SessionResult(
                         SessionResult.RESULT_SUCCESS,
                         Bundle().apply {
-                            putInt(CustomCommands.LOUDNESS_GAIN_KEY, currentVolumeGain)
+                            putInt(CustomCommands.LOUDNESS_GAIN_KEY, requestedVolumeGain)
                         },
                     )
                 }
@@ -1267,7 +1286,7 @@ class PlayerService : MediaSessionService() {
                 )
             }.build()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.error(TAG, "Failed to create media session", e)
         }
     }
 

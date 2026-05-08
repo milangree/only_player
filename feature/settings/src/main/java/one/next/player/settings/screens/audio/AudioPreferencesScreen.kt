@@ -115,6 +115,20 @@ private fun AudioPreferencesContent(
                     onClick = { onEvent(AudioPreferencesUiEvent.ToggleShowSystemVolumePanel) },
                 )
                 PreferenceSwitch(
+                    title = stringResource(id = R.string.remember_volume_level),
+                    description = stringResource(id = R.string.remember_volume_level_description),
+                    icon = NextIcons.VolumeUp,
+                    isChecked = uiState.preferences.shouldRememberPlayerVolume,
+                    onClick = { onEvent(AudioPreferencesUiEvent.ToggleRememberPlayerVolume) },
+                )
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.volume_normalization),
+                    description = stringResource(id = R.string.volume_normalization_desc),
+                    icon = NextIcons.VolumeUp,
+                    isChecked = uiState.preferences.isVolumeNormalizationEnabled,
+                    onClick = { onEvent(AudioPreferencesUiEvent.ToggleVolumeNormalization) },
+                )
+                PreferenceSwitch(
                     title = stringResource(id = R.string.volume_boost),
                     description = stringResource(id = R.string.volume_boost_desc),
                     icon = NextIcons.VolumeUp,

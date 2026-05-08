@@ -41,6 +41,8 @@ class AudioPreferencesViewModel @Inject constructor(
             AudioPreferencesUiEvent.TogglePauseOnHeadsetDisconnect -> togglePauseOnHeadsetDisconnect()
             AudioPreferencesUiEvent.ToggleShowSystemVolumePanel -> toggleShowSystemVolumePanel()
             AudioPreferencesUiEvent.ToggleRequireAudioFocus -> toggleRequireAudioFocus()
+            AudioPreferencesUiEvent.ToggleRememberPlayerVolume -> toggleRememberPlayerVolume()
+            AudioPreferencesUiEvent.ToggleVolumeNormalization -> toggleVolumeNormalization()
             AudioPreferencesUiEvent.ToggleVolumeBoost -> toggleVolumeBoost()
         }
     }
@@ -83,6 +85,22 @@ class AudioPreferencesViewModel @Inject constructor(
         }
     }
 
+    private fun toggleRememberPlayerVolume() {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(shouldRememberPlayerVolume = !it.shouldRememberPlayerVolume)
+            }
+        }
+    }
+
+    private fun toggleVolumeNormalization() {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(isVolumeNormalizationEnabled = !it.isVolumeNormalizationEnabled)
+            }
+        }
+    }
+
     private fun toggleVolumeBoost() {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
@@ -108,5 +126,7 @@ sealed interface AudioPreferencesUiEvent {
     data object TogglePauseOnHeadsetDisconnect : AudioPreferencesUiEvent
     data object ToggleShowSystemVolumePanel : AudioPreferencesUiEvent
     data object ToggleRequireAudioFocus : AudioPreferencesUiEvent
+    data object ToggleRememberPlayerVolume : AudioPreferencesUiEvent
+    data object ToggleVolumeNormalization : AudioPreferencesUiEvent
     data object ToggleVolumeBoost : AudioPreferencesUiEvent
 }

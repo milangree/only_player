@@ -163,6 +163,10 @@
     <string name="pause_on_headset_disconnect">断开连接时暂停</string>
     <string name="system_volume_panel_desc">连接着耳机调整音量时显示系统音量面板</string>
     <string name="system_volume_panel">系统音量面板</string>
+    <string name="remember_volume_level">记住音量</string>
+    <string name="remember_volume_level_description">开始播放时恢复播放器音量</string>
+    <string name="volume_normalization">音量标准化</string>
+    <string name="volume_normalization_desc">应用轻量增益，让偏小声的视频更容易听清</string>
     <string name="fields">字段</string>
     <string name="system_caption_style">系统字幕样式</string>
     <string name="thumbnail">缩略图</string>

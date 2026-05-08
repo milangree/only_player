@@ -28,6 +28,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import one.next.player.core.common.Logger
 import one.next.player.feature.player.service.getLoudnessGain
 import one.next.player.feature.player.service.isLoudnessGainSupported
 import one.next.player.feature.player.service.setLoudnessGain
@@ -37,14 +38,20 @@ import one.next.player.feature.player.service.setLoudnessGain
 fun rememberVolumeState(
     player: Player?,
     shouldShowVolumePanelIfHeadsetIsOn: Boolean,
+    isVolumeBoostEnabled: Boolean,
 ): VolumeState {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val volumeState = remember {
+    val volumeState = remember(
+        player,
+        shouldShowVolumePanelIfHeadsetIsOn,
+        isVolumeBoostEnabled,
+    ) {
         VolumeState(
             player = player,
             context = context,
             shouldShowVolumePanelIfHeadsetIsOn = shouldShowVolumePanelIfHeadsetIsOn,
+            isVolumeBoostEnabled = isVolumeBoostEnabled,
             scope = scope,
         )
     }
@@ -58,6 +65,7 @@ class VolumeState(
     private val player: Player?,
     private val context: Context,
     private val shouldShowVolumePanelIfHeadsetIsOn: Boolean,
+    private val isVolumeBoostEnabled: Boolean,
     private val scope: CoroutineScope,
 ) {
     private val audioManager = getSystemService(context, AudioManager::class.java)!!
@@ -79,9 +87,14 @@ class VolumeState(
         private set
 
     fun updateVolumePercentage(percentage: Int) {
-        val maxPercentage = maxVolumePercentage
+        val maxPercentage = if (isVolumeBoostEnabled) {
+            MAX_VOLUME_PERCENTAGE_BOOST
+        } else {
+            maxVolumePercentage
+        }
         val clampedPercentage = percentage.coerceIn(0, maxPercentage)
         val targetVolume = (clampedPercentage * systemMaxVolume) / MAX_VOLUME_PERCENTAGE_NORMAL
+        Logger.debug(TAG, "Restore player volume: percentage=$clampedPercentage, targetVolume=$targetVolume")
 
         setVolume(targetVolume)
     }
@@ -115,7 +128,7 @@ class VolumeState(
 
     suspend fun initialize() {
         val player = player as? MediaController ?: return
-        isLoudnessGainSupported = player.isLoudnessGainSupported()
+        isLoudnessGainSupported = isVolumeBoostEnabled && player.isLoudnessGainSupported()
         val loudnessGain = player.getLoudnessGain()
         val systemVolume = audioManager.currentStreamVolume
 
@@ -134,16 +147,24 @@ class VolumeState(
         player.listen { events ->
             if (events.contains(Player.EVENT_AUDIO_SESSION_ID)) {
                 scope.launch {
-                    isLoudnessGainSupported = player.isLoudnessGainSupported()
+                    isLoudnessGainSupported = isVolumeBoostEnabled && player.isLoudnessGainSupported()
                 }
             }
         }
     }
 
     private fun setVolume(volume: Int, shouldShowVolumePanel: Boolean = false) {
-        val clampedVolume = volume.coerceIn(0, maxVolume)
+        val clampedVolume = volume.coerceIn(0, maximumAllowedVolume)
         currentVolume = clampedVolume
         volumePercentage = calculateVolumePercentage()
+
+        Logger.debug(TAG, "Set player volume: current=$clampedVolume, percentage=$volumePercentage, boostEnabled=$isVolumeBoostEnabled")
+
+        if (!isVolumeBoostEnabled) {
+            setSystemVolume(clampedVolume, shouldShowVolumePanel)
+            applyVolumeBoost(0)
+            return
+        }
 
         if (clampedVolume <= systemMaxVolume) {
             setSystemVolume(clampedVolume, shouldShowVolumePanel)
@@ -153,6 +174,9 @@ class VolumeState(
             applyVolumeBoost(clampedVolume - systemMaxVolume)
         }
     }
+
+    private val maximumAllowedVolume: Int
+        get() = if (isVolumeBoostEnabled) systemMaxVolume * 2 else maxVolume
 
     private fun setSystemVolume(volume: Int, shouldShowVolumePanel: Boolean) {
         val shouldShowUi = shouldShowVolumePanel || (shouldShowVolumePanelIfHeadsetIsOn && audioManager.isHeadsetOn)
@@ -170,7 +194,7 @@ class VolumeState(
         try {
             player.setLoudnessGain(gainMillibels)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.error(TAG, "Failed to apply volume boost", e)
         }
     }
 
@@ -189,6 +213,7 @@ class VolumeState(
         }
 
     companion object {
+        private const val TAG = "VolumeState"
         private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
         private const val MAX_VOLUME_PERCENTAGE_NORMAL = 100
         private const val MAX_VOLUME_PERCENTAGE_BOOST = 200

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import one.next.player.core.common.Logger
 import one.next.player.core.data.repository.ExternalSubtitleFontSource
 import one.next.player.core.data.repository.MediaRepository
 import one.next.player.core.data.repository.PreferencesRepository
@@ -37,6 +38,10 @@ class PlayerViewModel @Inject constructor(
     private val subtitleFontRepository: SubtitleFontRepository,
     private val getSortedPlaylistUseCase: GetSortedPlaylistUseCase,
 ) : ViewModel() {
+
+    private companion object {
+        const val TAG = "PlayerViewModel"
+    }
 
     var shouldPlayWhenReady: Boolean = true
 
@@ -87,6 +92,19 @@ class PlayerViewModel @Inject constructor(
     fun updatePlayerBrightness(value: Float) {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences { it.copy(playerBrightness = value) }
+        }
+    }
+
+    fun updatePlayerVolume(percentage: Int) {
+        viewModelScope.launch {
+            val clampedPercentage = percentage.coerceIn(
+                minimumValue = 0,
+                maximumValue = PlayerPreferences.MAX_PLAYER_VOLUME_PERCENTAGE,
+            )
+            Logger.debug(TAG, "Remember player volume: percentage=$clampedPercentage")
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(playerVolumePercentage = clampedPercentage)
+            }
         }
     }
 
