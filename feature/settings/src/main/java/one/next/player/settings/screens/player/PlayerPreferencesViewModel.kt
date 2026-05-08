@@ -40,7 +40,7 @@ class PlayerPreferencesViewModel @Inject constructor(
     fun onEvent(event: PlayerPreferencesUiEvent) {
         when (event) {
             is PlayerPreferencesUiEvent.ShowDialog -> showDialog(event.value)
-            is PlayerPreferencesUiEvent.UpdatePlaybackResume -> updatePlaybackResume(event.resume)
+            PlayerPreferencesUiEvent.TogglePlaybackResume -> togglePlaybackResume()
             PlayerPreferencesUiEvent.ToggleAutoplay -> toggleAutoplay()
             PlayerPreferencesUiEvent.ToggleAutoPip -> toggleAutoPip()
             PlayerPreferencesUiEvent.ToggleAutoBackgroundPlay -> toggleAutoBackgroundPlay()
@@ -59,11 +59,14 @@ class PlayerPreferencesViewModel @Inject constructor(
         }
     }
 
-    private fun updatePlaybackResume(resume: Resume) {
+    private fun togglePlaybackResume() {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
                 it.copy(
-                    resume = resume,
+                    resume = when (it.resume) {
+                        Resume.YES -> Resume.NO
+                        Resume.NO -> Resume.YES
+                    },
                 )
             }
         }
@@ -149,14 +152,13 @@ data class PlayerPreferencesUiState(
 )
 
 sealed interface PlayerPreferenceDialog {
-    data object ResumeDialog : PlayerPreferenceDialog
     data object PlayerScreenOrientationDialog : PlayerPreferenceDialog
     data object ControlButtonsDialog : PlayerPreferenceDialog
 }
 
 sealed interface PlayerPreferencesUiEvent {
     data class ShowDialog(val value: PlayerPreferenceDialog?) : PlayerPreferencesUiEvent
-    data class UpdatePlaybackResume(val resume: Resume) : PlayerPreferencesUiEvent
+    data object TogglePlaybackResume : PlayerPreferencesUiEvent
     data object ToggleAutoplay : PlayerPreferencesUiEvent
     data object ToggleAutoPip : PlayerPreferencesUiEvent
     data object ToggleAutoBackgroundPlay : PlayerPreferencesUiEvent

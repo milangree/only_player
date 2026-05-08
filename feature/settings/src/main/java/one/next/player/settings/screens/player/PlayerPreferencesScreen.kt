@@ -26,7 +26,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import one.next.player.core.common.extensions.isPipFeatureSupported
 import one.next.player.core.model.ControlButtonsPosition
 import one.next.player.core.model.PlayerPreferences
-import one.next.player.core.model.Resume
 import one.next.player.core.model.ScreenOrientation
 import one.next.player.core.ui.R
 import one.next.player.core.ui.components.ClickablePreferenceItem
@@ -40,6 +39,7 @@ import one.next.player.core.ui.extensions.withBottomFallback
 import one.next.player.core.ui.preview.DayNightPreview
 import one.next.player.core.ui.theme.OnePlayerTheme
 import one.next.player.settings.composables.OptionsDialog
+import one.next.player.settings.extensions.isEnabled
 import one.next.player.settings.extensions.name
 
 @Composable
@@ -114,11 +114,12 @@ private fun PlayerPreferencesContent(
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                ClickablePreferenceItem(
+                PreferenceSwitch(
                     title = stringResource(id = R.string.resume),
                     description = stringResource(id = R.string.resume_description),
                     icon = NextIcons.Resume,
-                    onClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.ResumeDialog)) },
+                    isChecked = uiState.preferences.resume.isEnabled,
+                    onClick = { onEvent(PlayerPreferencesUiEvent.TogglePlaybackResume) },
                     isFirstItem = true,
                 )
                 PreferenceSlider(
@@ -189,24 +190,6 @@ private fun PlayerPreferencesContent(
 
         uiState.showDialog?.let { showDialog ->
             when (showDialog) {
-                PlayerPreferenceDialog.ResumeDialog -> {
-                    OptionsDialog(
-                        text = stringResource(id = R.string.resume),
-                        onDismissClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(null)) },
-                    ) {
-                        items(Resume.entries.toTypedArray()) {
-                            RadioTextButton(
-                                text = it.name(),
-                                isSelected = (it == uiState.preferences.resume),
-                                onClick = {
-                                    onEvent(PlayerPreferencesUiEvent.UpdatePlaybackResume(it))
-                                    onEvent(PlayerPreferencesUiEvent.ShowDialog(null))
-                                },
-                            )
-                        }
-                    }
-                }
-
                 PlayerPreferenceDialog.PlayerScreenOrientationDialog -> {
                     OptionsDialog(
                         text = stringResource(id = R.string.player_screen_orientation),

@@ -14,3 +14,9 @@ fun Resume.name(): String {
 
     return stringResource(id = stringRes)
 }
+
+val Resume.isEnabled: Boolean
+    get() = when (this) {
+        Resume.YES -> true
+        Resume.NO -> false
+    }
