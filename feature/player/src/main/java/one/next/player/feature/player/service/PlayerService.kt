@@ -5,7 +5,6 @@ import android.content.ContentResolver
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
@@ -64,7 +63,6 @@ import coil3.request.SuccessResult
 import coil3.toBitmap
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
-import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import io.github.peerless2012.ass.media.AssHandler
@@ -159,21 +157,6 @@ class PlayerService : MediaSessionService() {
         private const val FAST_SEEK_MIN_DELTA_MS = 2_000L
         private const val STARTUP_PRECISE_RESUME_THRESHOLD_MS = 10_000L
         private const val SKIP_ENDING_CHECK_INTERVAL_MS = 500L
-        private const val NORMALIZATION_CUTOFF_FREQUENCY_HZ = 2_000f
-        private const val NORMALIZATION_ATTACK_TIME_MS = 5f
-        private const val NORMALIZATION_RELEASE_TIME_MS = 120f
-        private const val NORMALIZATION_RATIO = 3f
-        private const val NORMALIZATION_THRESHOLD_DB = -18f
-        private const val NORMALIZATION_KNEE_WIDTH_DB = 6f
-        private const val NORMALIZATION_NOISE_GATE_THRESHOLD_DB = -80f
-        private const val NORMALIZATION_EXPANDER_RATIO = 1f
-        private const val NORMALIZATION_PRE_GAIN_DB = 3f
-        private const val NORMALIZATION_POST_GAIN_DB = 3f
-        private const val NORMALIZATION_LIMITER_ATTACK_TIME_MS = 1f
-        private const val NORMALIZATION_LIMITER_RELEASE_TIME_MS = 60f
-        private const val NORMALIZATION_LIMITER_RATIO = 10f
-        private const val NORMALIZATION_LIMITER_THRESHOLD_DB = -1f
-        private const val NORMALIZATION_LIMITER_POST_GAIN_DB = 0f
         private const val MKV_CUES_CACHE_MAGIC = 0x4E505145
         private val ISO_639_2T_TO_1 = mapOf(
             "zho" to "zh", "chi" to "zh",
@@ -264,8 +247,8 @@ class PlayerService : MediaSessionService() {
 
     private var isMediaItemReady = false
 
+    private val volumeNormalizationAudioProcessor = VolumeNormalizationAudioProcessor()
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var dynamicsProcessing: DynamicsProcessing? = null
     private var requestedVolumeGain: Int = 0
     private val mediaParserRetried = mutableSetOf<String>()
     private var isPendingExternalSubAutoSelect = false
@@ -694,11 +677,9 @@ class PlayerService : MediaSessionService() {
             super.onAudioSessionIdChanged(audioSessionId)
             if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) {
                 releaseLoudnessEnhancer()
-                releaseDynamicsProcessing()
                 return
             }
             initializeLoudnessEnhancer(audioSessionId)
-            initializeDynamicsProcessing(audioSessionId)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -1027,39 +1008,6 @@ class PlayerService : MediaSessionService() {
         }
     }
 
-    private fun initializeDynamicsProcessing(audioSessionId: Int) {
-        if (!playerPreferences.isVolumeNormalizationEnabled) return
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        try {
-            releaseDynamicsProcessing()
-            dynamicsProcessing = DynamicsProcessing(
-                0,
-                audioSessionId,
-                buildVolumeNormalizationConfig(),
-            )
-            applyVolumeNormalization()
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to initialize volume normalization", e)
-            dynamicsProcessing = null
-        }
-    }
-
-    private fun releaseDynamicsProcessing() {
-        val processor = dynamicsProcessing ?: return
-        try {
-            processor.enabled = false
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to disable volume normalization", e)
-        }
-        try {
-            processor.release()
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to release volume normalization", e)
-        } finally {
-            dynamicsProcessing = null
-        }
-    }
-
     private fun handleRepeatedPlayback(player: Player) {
         openingSkippedMediaId = null
         player.currentMediaItem?.mediaMetadata?.let { metadata ->
@@ -1142,60 +1090,6 @@ class PlayerService : MediaSessionService() {
         emptyList()
     } else {
         listOf(VideoSharpeningEffect(this))
-    }
-
-    private fun buildVolumeNormalizationConfig(): DynamicsProcessing.Config {
-        val mbcBand = DynamicsProcessing.MbcBand(
-            true,
-            NORMALIZATION_CUTOFF_FREQUENCY_HZ,
-            NORMALIZATION_ATTACK_TIME_MS,
-            NORMALIZATION_RELEASE_TIME_MS,
-            NORMALIZATION_RATIO,
-            NORMALIZATION_THRESHOLD_DB,
-            NORMALIZATION_KNEE_WIDTH_DB,
-            NORMALIZATION_NOISE_GATE_THRESHOLD_DB,
-            NORMALIZATION_EXPANDER_RATIO,
-            NORMALIZATION_PRE_GAIN_DB,
-            NORMALIZATION_POST_GAIN_DB,
-        )
-        val mbc = DynamicsProcessing.Mbc(true, true, 1).apply {
-            setBand(0, mbcBand)
-        }
-        val limiter = DynamicsProcessing.Limiter(
-            true,
-            true,
-            0,
-            NORMALIZATION_LIMITER_ATTACK_TIME_MS,
-            NORMALIZATION_LIMITER_RELEASE_TIME_MS,
-            NORMALIZATION_LIMITER_RATIO,
-            NORMALIZATION_LIMITER_THRESHOLD_DB,
-            NORMALIZATION_LIMITER_POST_GAIN_DB,
-        )
-
-        return DynamicsProcessing.Config.Builder(
-            DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
-            1,
-            false,
-            0,
-            true,
-            1,
-            false,
-            0,
-            true,
-        )
-            .setMbcAllChannelsTo(mbc)
-            .setLimiterAllChannelsTo(limiter)
-            .build()
-    }
-
-    private fun applyVolumeNormalization() {
-        val processor = dynamicsProcessing ?: return
-        try {
-            processor.enabled = playerPreferences.isVolumeNormalizationEnabled
-            Logger.debug(TAG, "Apply volume normalization: enabled=${processor.enabled}")
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to apply volume normalization", e)
-        }
     }
 
     private fun applyLoudnessEnhancerGain() {
@@ -1440,15 +1334,15 @@ class PlayerService : MediaSessionService() {
             preferencesRepository.playerPreferences
                 .distinctUntilChanged { old, new -> old.isVolumeNormalizationEnabled == new.isVolumeNormalizationEnabled }
                 .collect { preferences ->
-                    if (preferences.isVolumeNormalizationEnabled) {
-                        val audioSessionId = mediaSession?.player?.audioSessionId ?: return@collect
-                        initializeDynamicsProcessing(audioSessionId)
-                    } else {
-                        releaseDynamicsProcessing()
-                    }
+                    volumeNormalizationAudioProcessor.isEnabled = preferences.isVolumeNormalizationEnabled
+                    Logger.debug(TAG, "Apply volume normalization: enabled=${preferences.isVolumeNormalizationEnabled}")
                 }
         }
-        val renderersFactory = NextRenderersFactory(applicationContext)
+        volumeNormalizationAudioProcessor.isEnabled = playerPreferences.isVolumeNormalizationEnabled
+        val renderersFactory = NormalizingRenderersFactory(
+            context = applicationContext,
+            volumeNormalizationAudioProcessor = volumeNormalizationAudioProcessor,
+        )
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(
                 when (playerPreferences.decoderPriority) {
@@ -1561,7 +1455,6 @@ class PlayerService : MediaSessionService() {
     override fun onDestroy() {
         super.onDestroy()
         releaseLoudnessEnhancer()
-        releaseDynamicsProcessing()
         pendingPreciseSeekPromotionJob?.cancel()
         pendingPreciseSeekPromotionJob = null
         assHandler?.let(AssHandlerRegistry::unregister)
