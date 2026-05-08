@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
@@ -14,6 +15,7 @@ import androidx.core.net.toFile
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -86,6 +88,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -154,6 +158,22 @@ class PlayerService : MediaSessionService() {
         private const val TAG = "PlayerService"
         private const val FAST_SEEK_MIN_DELTA_MS = 2_000L
         private const val STARTUP_PRECISE_RESUME_THRESHOLD_MS = 10_000L
+        private const val SKIP_ENDING_CHECK_INTERVAL_MS = 500L
+        private const val NORMALIZATION_CUTOFF_FREQUENCY_HZ = 2_000f
+        private const val NORMALIZATION_ATTACK_TIME_MS = 5f
+        private const val NORMALIZATION_RELEASE_TIME_MS = 120f
+        private const val NORMALIZATION_RATIO = 3f
+        private const val NORMALIZATION_THRESHOLD_DB = -18f
+        private const val NORMALIZATION_KNEE_WIDTH_DB = 6f
+        private const val NORMALIZATION_NOISE_GATE_THRESHOLD_DB = -80f
+        private const val NORMALIZATION_EXPANDER_RATIO = 1f
+        private const val NORMALIZATION_PRE_GAIN_DB = 3f
+        private const val NORMALIZATION_POST_GAIN_DB = 3f
+        private const val NORMALIZATION_LIMITER_ATTACK_TIME_MS = 1f
+        private const val NORMALIZATION_LIMITER_RELEASE_TIME_MS = 60f
+        private const val NORMALIZATION_LIMITER_RATIO = 10f
+        private const val NORMALIZATION_LIMITER_THRESHOLD_DB = -1f
+        private const val NORMALIZATION_LIMITER_POST_GAIN_DB = 0f
         private const val MKV_CUES_CACHE_MAGIC = 0x4E505145
         private val ISO_639_2T_TO_1 = mapOf(
             "zho" to "zh", "chi" to "zh",
@@ -245,12 +265,16 @@ class PlayerService : MediaSessionService() {
     private var isMediaItemReady = false
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var dynamicsProcessing: DynamicsProcessing? = null
     private var requestedVolumeGain: Int = 0
     private val mediaParserRetried = mutableSetOf<String>()
     private var isPendingExternalSubAutoSelect = false
     private var assHandler: AssHandler? = null
     private var pendingPreciseSeekPromotionJob: Job? = null
     private var pendingStartupPreciseResumeToken: String? = null
+    private var skipEndingMonitorJob: Job? = null
+    private var openingSkippedMediaId: String? = null
+    private var currentVideoSharpening: Float = PlayerPreferences.DEFAULT_VIDEO_SHARPENING
     private lateinit var fastStartMediaSourceFactory: DefaultMediaSourceFactory
     private lateinit var preciseSeekMediaSourceFactory: DefaultMediaSourceFactory
     private var sessionLoadErrorHandlingPolicy: LoadErrorHandlingPolicy? = null
@@ -359,10 +383,16 @@ class PlayerService : MediaSessionService() {
     private val playbackStateListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             super.onMediaItemTransition(mediaItem, reason)
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) return
+            openingSkippedMediaId = null
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
+                handleRepeatedPlayback(mediaSession?.player ?: return)
+                return
+            }
             pendingPreciseSeekPromotionJob?.cancel()
             pendingPreciseSeekPromotionJob = null
             pendingStartupPreciseResumeToken = null
+            skipEndingMonitorJob?.cancel()
+            skipEndingMonitorJob = null
             isMediaItemReady = false
             isPendingExternalSubAutoSelect = false
             if (mediaItem != null) {
@@ -576,6 +606,8 @@ class PlayerService : MediaSessionService() {
                     )
                 }
                 updateFolderPlaybackAnchor(currentMediaItem)
+                applySkipOpening(player, currentMediaItem)
+                updateSkipEndingMonitor(player)
             }
         }
 
@@ -586,6 +618,7 @@ class PlayerService : MediaSessionService() {
             val player = mediaSession?.player ?: return
             if (player.repeatMode != Player.REPEAT_MODE_OFF) {
                 player.seekTo(0)
+                handleRepeatedPlayback(player)
                 player.play()
                 return
             }
@@ -612,16 +645,19 @@ class PlayerService : MediaSessionService() {
             )
 
             val duration = player.duration.takeIf { it != C.TIME_UNSET }
+            val currentPosition = player.currentPosition.takeIf { it != C.TIME_UNSET }
+            val updatedMediaItem = currentMediaItem.copy(
+                positionMs = currentPosition,
+                durationMs = duration,
+                videoWidth = width,
+                videoHeight = height,
+                videoRotation = rotation,
+            )
             player.replaceMediaItem(
                 player.currentMediaItemIndex,
-                currentMediaItem.copy(
-                    durationMs = duration,
-                    videoWidth = width,
-                    videoHeight = height,
-                    videoRotation = rotation,
-                ),
+                updatedMediaItem,
             )
-            continueDeferredStartupPreciseResume(currentMediaItem)
+            continueDeferredStartupPreciseResume(updatedMediaItem)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -656,21 +692,13 @@ class PlayerService : MediaSessionService() {
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             super.onAudioSessionIdChanged(audioSessionId)
-            if (!playerPreferences.canUseLoudnessEnhancer) return
-            if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-            try {
-                loudnessEnhancer?.release()
-                loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-                Logger.debug(
-                    TAG,
-                    "Loudness enhancer initialized: normalization=${playerPreferences.isVolumeNormalizationEnabled}, " +
-                        "boost=${playerPreferences.isVolumeBoostEnabled}",
-                )
-                applyLoudnessEnhancerGain()
-            } catch (e: Exception) {
-                Logger.error(TAG, "Failed to initialize loudness enhancer", e)
-                loudnessEnhancer = null
+            if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) {
+                releaseLoudnessEnhancer()
+                releaseDynamicsProcessing()
+                return
             }
+            initializeLoudnessEnhancer(audioSessionId)
+            initializeDynamicsProcessing(audioSessionId)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -960,31 +988,228 @@ class PlayerService : MediaSessionService() {
 
     private fun setEnhancerTargetGain(gain: Int) {
         requestedVolumeGain = gain.coerceAtLeast(0)
+        if (loudnessEnhancer == null && playerPreferences.isVolumeBoostEnabled) {
+            val audioSessionId = mediaSession?.player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                initializeLoudnessEnhancer(audioSessionId)
+            }
+        }
         applyLoudnessEnhancerGain()
+    }
+
+    private fun initializeLoudnessEnhancer(audioSessionId: Int) {
+        if (!playerPreferences.isVolumeBoostEnabled) return
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        try {
+            releaseLoudnessEnhancer()
+            loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+            Logger.debug(TAG, "Loudness enhancer initialized: boost=true")
+            applyLoudnessEnhancerGain()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to initialize loudness enhancer", e)
+            loudnessEnhancer = null
+        }
+    }
+
+    private fun releaseLoudnessEnhancer() {
+        val enhancer = loudnessEnhancer ?: return
+        try {
+            enhancer.enabled = false
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to disable loudness enhancer", e)
+        }
+        try {
+            enhancer.release()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to release loudness enhancer", e)
+        } finally {
+            loudnessEnhancer = null
+        }
+    }
+
+    private fun initializeDynamicsProcessing(audioSessionId: Int) {
+        if (!playerPreferences.isVolumeNormalizationEnabled) return
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        try {
+            releaseDynamicsProcessing()
+            dynamicsProcessing = DynamicsProcessing(
+                0,
+                audioSessionId,
+                buildVolumeNormalizationConfig(),
+            )
+            applyVolumeNormalization()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to initialize volume normalization", e)
+            dynamicsProcessing = null
+        }
+    }
+
+    private fun releaseDynamicsProcessing() {
+        val processor = dynamicsProcessing ?: return
+        try {
+            processor.enabled = false
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to disable volume normalization", e)
+        }
+        try {
+            processor.release()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to release volume normalization", e)
+        } finally {
+            dynamicsProcessing = null
+        }
+    }
+
+    private fun handleRepeatedPlayback(player: Player) {
+        openingSkippedMediaId = null
+        player.currentMediaItem?.mediaMetadata?.let { metadata ->
+            player.setPlaybackSpeed(playerPreferences.defaultPlaybackSpeed)
+            player.playerSpecificSubtitleDelayMilliseconds = metadata.subtitleDelayMilliseconds ?: 0L
+            player.playerSpecificSubtitleSpeed = metadata.subtitleSpeed ?: 1f
+        }
+        player.currentMediaItem?.let { applySkipOpening(player, it) }
+        updateSkipEndingMonitor(player)
+    }
+
+    private fun applySkipOpening(
+        player: Player,
+        mediaItem: MediaItem,
+    ) {
+        val openingMs = playerPreferences.skipOpeningSeconds * 1000L
+        if (openingMs <= 0L) return
+        if (openingSkippedMediaId == mediaItem.mediaId) return
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: return
+        if (openingMs >= duration) return
+        val currentPosition = player.currentPosition.takeIf { it != C.TIME_UNSET } ?: 0L
+        if (currentPosition >= openingMs) return
+
+        openingSkippedMediaId = mediaItem.mediaId
+        Logger.debug(TAG, "Skip opening: seconds=${playerPreferences.skipOpeningSeconds}")
+        seekWithinCurrentItem(player, openingMs)
+    }
+
+    private fun seekWithinCurrentItem(
+        player: Player,
+        targetPositionMs: Long,
+    ) {
+        val currentItem = player.currentMediaItem ?: return
+        if (currentItem.mediaMetadata.isApproximateSeekEnabled) {
+            promoteCurrentItemToPreciseSeek(targetPositionMs)
+            return
+        }
+        player.seekTo(targetPositionMs)
+    }
+
+    private fun updateSkipEndingMonitor(player: Player) {
+        skipEndingMonitorJob?.cancel()
+        skipEndingMonitorJob = null
+        if (playerPreferences.skipEndingSeconds <= 0) return
+
+        skipEndingMonitorJob = serviceScope.launch {
+            while (true) {
+                delay(SKIP_ENDING_CHECK_INTERVAL_MS)
+                if (!player.isPlaying) continue
+                val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: continue
+                val currentPosition = player.currentPosition.takeIf { it != C.TIME_UNSET } ?: continue
+                val endingMs = playerPreferences.skipEndingSeconds * 1000L
+                if (endingMs <= 0L || endingMs >= duration || currentPosition < duration - endingMs) continue
+
+                Logger.debug(TAG, "Skip ending: seconds=${playerPreferences.skipEndingSeconds}")
+                seekWithinCurrentItem(player, duration)
+                return@launch
+            }
+        }
+    }
+
+    private fun applyVideoSharpening(value: Float) {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        applyVideoSharpening(player, value)
+    }
+
+    private fun applyVideoSharpening(
+        player: ExoPlayer,
+        value: Float,
+    ) {
+        val sharpening = value.coerceIn(PlayerPreferences.DEFAULT_VIDEO_SHARPENING, PlayerPreferences.MAX_VIDEO_SHARPENING)
+        if (currentVideoSharpening == sharpening) return
+
+        currentVideoSharpening = sharpening
+        player.setVideoEffects(sharpening.toVideoEffects())
+        Logger.debug(TAG, "Apply video sharpening: percent=${(sharpening * 100).toInt()}")
+    }
+
+    private fun Float.toVideoEffects(): List<Effect> = if (this <= 0f) {
+        emptyList()
+    } else {
+        listOf(VideoSharpeningEffect(this))
+    }
+
+    private fun buildVolumeNormalizationConfig(): DynamicsProcessing.Config {
+        val mbcBand = DynamicsProcessing.MbcBand(
+            true,
+            NORMALIZATION_CUTOFF_FREQUENCY_HZ,
+            NORMALIZATION_ATTACK_TIME_MS,
+            NORMALIZATION_RELEASE_TIME_MS,
+            NORMALIZATION_RATIO,
+            NORMALIZATION_THRESHOLD_DB,
+            NORMALIZATION_KNEE_WIDTH_DB,
+            NORMALIZATION_NOISE_GATE_THRESHOLD_DB,
+            NORMALIZATION_EXPANDER_RATIO,
+            NORMALIZATION_PRE_GAIN_DB,
+            NORMALIZATION_POST_GAIN_DB,
+        )
+        val mbc = DynamicsProcessing.Mbc(true, true, 1).apply {
+            setBand(0, mbcBand)
+        }
+        val limiter = DynamicsProcessing.Limiter(
+            true,
+            true,
+            0,
+            NORMALIZATION_LIMITER_ATTACK_TIME_MS,
+            NORMALIZATION_LIMITER_RELEASE_TIME_MS,
+            NORMALIZATION_LIMITER_RATIO,
+            NORMALIZATION_LIMITER_THRESHOLD_DB,
+            NORMALIZATION_LIMITER_POST_GAIN_DB,
+        )
+
+        return DynamicsProcessing.Config.Builder(
+            DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
+            1,
+            false,
+            0,
+            true,
+            1,
+            false,
+            0,
+            true,
+        )
+            .setMbcAllChannelsTo(mbc)
+            .setLimiterAllChannelsTo(limiter)
+            .build()
+    }
+
+    private fun applyVolumeNormalization() {
+        val processor = dynamicsProcessing ?: return
+        try {
+            processor.enabled = playerPreferences.isVolumeNormalizationEnabled
+            Logger.debug(TAG, "Apply volume normalization: enabled=${processor.enabled}")
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to apply volume normalization", e)
+        }
     }
 
     private fun applyLoudnessEnhancerGain() {
         val enhancer = loudnessEnhancer ?: return
-        val gain = requestedVolumeGain + playerPreferences.normalizationGain
+        val gain = requestedVolumeGain
 
         try {
             enhancer.setTargetGain(gain)
             enhancer.enabled = gain > 0
-            Logger.debug(
-                TAG,
-                "Apply loudness gain: requested=$requestedVolumeGain, normalization=${playerPreferences.normalizationGain}, " +
-                    "target=$gain, enabled=${gain > 0}",
-            )
+            Logger.debug(TAG, "Apply loudness gain: requested=$requestedVolumeGain, enabled=${gain > 0}")
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to apply loudness enhancer gain", e)
         }
     }
-
-    private val PlayerPreferences.canUseLoudnessEnhancer: Boolean
-        get() = isVolumeBoostEnabled || isVolumeNormalizationEnabled
-
-    private val PlayerPreferences.normalizationGain: Int
-        get() = if (isVolumeNormalizationEnabled) PlayerPreferences.VOLUME_NORMALIZATION_GAIN_MB else 0
 
     private val mediaSessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -1189,6 +1414,40 @@ class PlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         serviceScope.launch(Dispatchers.IO) { warmUpCodecCache() }
+        serviceScope.launch {
+            preferencesRepository.playerPreferences
+                .distinctUntilChanged { old, new -> old.videoSharpening == new.videoSharpening }
+                .collect { preferences -> applyVideoSharpening(preferences.videoSharpening) }
+        }
+        serviceScope.launch {
+            preferencesRepository.playerPreferences
+                .distinctUntilChanged { old, new -> old.skipEndingSeconds == new.skipEndingSeconds }
+                .collect { updateSkipEndingMonitor(mediaSession?.player ?: return@collect) }
+        }
+        serviceScope.launch {
+            preferencesRepository.playerPreferences
+                .distinctUntilChanged { old, new -> old.isVolumeBoostEnabled == new.isVolumeBoostEnabled }
+                .collect { preferences ->
+                    if (preferences.isVolumeBoostEnabled) {
+                        val audioSessionId = mediaSession?.player?.audioSessionId ?: return@collect
+                        initializeLoudnessEnhancer(audioSessionId)
+                    } else {
+                        releaseLoudnessEnhancer()
+                    }
+                }
+        }
+        serviceScope.launch {
+            preferencesRepository.playerPreferences
+                .distinctUntilChanged { old, new -> old.isVolumeNormalizationEnabled == new.isVolumeNormalizationEnabled }
+                .collect { preferences ->
+                    if (preferences.isVolumeNormalizationEnabled) {
+                        val audioSessionId = mediaSession?.player?.audioSessionId ?: return@collect
+                        initializeDynamicsProcessing(audioSessionId)
+                    } else {
+                        releaseDynamicsProcessing()
+                    }
+                }
+        }
         val renderersFactory = NextRenderersFactory(applicationContext)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(
@@ -1261,6 +1520,8 @@ class PlayerService : MediaSessionService() {
                     LoopMode.ONE -> Player.REPEAT_MODE_ONE
                     LoopMode.ALL -> Player.REPEAT_MODE_ALL
                 }
+                currentVideoSharpening = PlayerPreferences.DEFAULT_VIDEO_SHARPENING
+                applyVideoSharpening(it, playerPreferences.videoSharpening)
             }
 
         try {
@@ -1299,8 +1560,8 @@ class PlayerService : MediaSessionService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        loudnessEnhancer?.release()
-        loudnessEnhancer = null
+        releaseLoudnessEnhancer()
+        releaseDynamicsProcessing()
         pendingPreciseSeekPromotionJob?.cancel()
         pendingPreciseSeekPromotionJob = null
         assHandler?.let(AssHandlerRegistry::unregister)

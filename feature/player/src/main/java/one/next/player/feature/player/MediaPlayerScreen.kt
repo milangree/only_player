@@ -70,6 +70,7 @@ import androidx.media3.common.util.UnstableApi
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
+import one.next.player.core.common.Logger
 import one.next.player.core.data.repository.ExternalSubtitleFontSource
 import one.next.player.core.model.PlayerControl
 import one.next.player.core.model.PlayerControlZone
@@ -110,6 +111,8 @@ import one.next.player.feature.player.ui.VerticalProgressView
 import one.next.player.feature.player.ui.controls.ControlsBottomView
 import one.next.player.feature.player.ui.controls.ControlsTopView
 import one.next.player.feature.player.ui.controls.PlayerCustomizableControlButton
+
+private const val TAG = "MediaPlayerScreen"
 
 val LocalControlsVisibilityState = compositionLocalOf<ControlsVisibilityState?> { null }
 
@@ -201,6 +204,9 @@ internal fun MediaPlayerScreen(
         player = player,
         screenOrientation = playerPreferences.playerScreenOrientation,
     )
+    var restoredVolumeMediaItemIndex by remember { mutableIntStateOf(Int.MIN_VALUE) }
+    var lastSavedVolumePercentage by remember { mutableIntStateOf(volumeState.volumePercentage) }
+    var pendingRestoredVolumePercentage by remember { mutableStateOf<Int?>(null) }
     val errorState = rememberErrorState(player = player)
 
     LaunchedEffect(pictureInPictureState.isInPictureInPictureMode) {
@@ -219,8 +225,12 @@ internal fun MediaPlayerScreen(
         if (playerPreferences.shouldRememberPlayerBrightness) {
             brightnessState.setBrightness(playerPreferences.playerBrightness)
         }
-        if (playerPreferences.shouldRememberPlayerVolume) {
-            volumeState.updateVolumePercentage(playerPreferences.playerVolumePercentage)
+        if (playerPreferences.shouldRememberPlayerVolume && restoredVolumeMediaItemIndex != player.currentMediaItemIndex) {
+            restoredVolumeMediaItemIndex = player.currentMediaItemIndex
+            val restoredVolumePercentage = playerPreferences.playerVolumePercentage
+                .coerceAtMost(PlayerPreferences.MAX_PLAYER_INITIAL_VOLUME_PERCENTAGE)
+            volumeState.updateVolumePercentage(restoredVolumePercentage)
+            pendingRestoredVolumePercentage = volumeState.volumePercentage
         }
     }
 
@@ -231,9 +241,17 @@ internal fun MediaPlayerScreen(
     }
 
     LaunchedEffect(volumeState.volumePercentage) {
-        if (playerPreferences.shouldRememberPlayerVolume) {
-            viewModel.updatePlayerVolume(volumeState.volumePercentage)
+        if (!playerPreferences.shouldRememberPlayerVolume) return@LaunchedEffect
+        if (pendingRestoredVolumePercentage == volumeState.volumePercentage) {
+            pendingRestoredVolumePercentage = null
+            lastSavedVolumePercentage = volumeState.volumePercentage
+            return@LaunchedEffect
         }
+        pendingRestoredVolumePercentage = null
+        if (lastSavedVolumePercentage == volumeState.volumePercentage) return@LaunchedEffect
+
+        lastSavedVolumePercentage = volumeState.volumePercentage
+        viewModel.updatePlayerVolume(volumeState.volumePercentage)
     }
 
     var overlayView by remember { mutableStateOf<OverlayView?>(null) }
@@ -286,10 +304,12 @@ internal fun MediaPlayerScreen(
     val keyboardController = remember {
         PlayerKeyboardController(
             onSeekBackward = {
+                Logger.debug(TAG, "Keyboard seek: offsetMs=${-seekIncrementState.value}")
                 currentPlayerState.value.seekByRequestedOffset(-seekIncrementState.value)
                 currentControlsVisibilityState.value.showControls()
             },
             onSeekForward = {
+                Logger.debug(TAG, "Keyboard seek: offsetMs=${seekIncrementState.value}")
                 currentPlayerState.value.seekByRequestedOffset(seekIncrementState.value)
                 currentControlsVisibilityState.value.showControls()
             },
