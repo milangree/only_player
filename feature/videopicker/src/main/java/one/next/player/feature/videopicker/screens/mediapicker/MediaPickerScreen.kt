@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import one.next.player.core.common.Logger
 import one.next.player.core.common.storagePermission
 import one.next.player.core.model.ApplicationPreferences
 import one.next.player.core.model.Folder
@@ -157,7 +158,7 @@ internal fun MediaPickerScreen(
     val selectionManager = rememberSelectionManager()
     val permissionState = rememberRuntimePermissionState(permission = storagePermission)
     val lazyGridState = rememberLazyGridState()
-    var restoredFolderPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var restoredPlaybackAnchor by rememberSaveable { mutableStateOf<String?>(null) }
     val selectVideoFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { it?.let { onPlayVideo(it) } },
@@ -494,7 +495,7 @@ internal fun MediaPickerScreen(
     }
 
     LaunchedEffect(uiState.folderPath) {
-        restoredFolderPath = null
+        restoredPlaybackAnchor = null
     }
 
     LaunchedEffect(
@@ -504,33 +505,25 @@ internal fun MediaPickerScreen(
     ) {
         if (!uiState.preferences.shouldRestoreLastPlayedMediaInFolders) return@LaunchedEffect
         val folderPath = uiState.folderPath ?: return@LaunchedEffect
-        if (restoredFolderPath == folderPath) return@LaunchedEffect
         val rootFolder = (uiState.mediaDataState as? DataState.Success)?.value ?: return@LaunchedEffect
-        val lastPlayedMediaUri = uiState.preferences.localFolderLastPlayedMediaUris[folderPath] ?: return@LaunchedEffect
-        val targetIndex = rootFolder.mediaList.indexOfFirst { video -> video.uriString == lastPlayedMediaUri }
-        if (targetIndex < 0) return@LaunchedEffect
+        val playbackAnchor = uiState.preferences.localFolderLastPlayedMediaUris[folderPath]
+        val recentlyPlayedVideo = rootFolder.recentlyPlayedVideo ?: return@LaunchedEffect
+        val restoreToken = playbackAnchor ?: recentlyPlayedVideo.uriString
+        if (restoredPlaybackAnchor == restoreToken) return@LaunchedEffect
+        val scrollIndex = resolveRestoreScrollIndex(
+            rootFolder = rootFolder,
+            mediaViewMode = uiState.preferences.mediaViewMode,
+            lastPlayedMediaUri = playbackAnchor,
+            recentlyPlayedVideo = recentlyPlayedVideo,
+        ) ?: return@LaunchedEffect
 
-        val scrollIndex = when (uiState.preferences.mediaViewMode) {
-            MediaViewMode.VIDEOS -> targetIndex
-            MediaViewMode.FOLDERS,
-            MediaViewMode.FOLDER_TREE,
-            -> {
-                val folderSectionSize = rootFolder.folderList.size
-                val folderHeaderOffset = if (rootFolder.folderList.isNotEmpty()) 1 else 0
-                val spacerOffset = if (
-                    uiState.preferences.mediaViewMode == MediaViewMode.FOLDER_TREE &&
-                    rootFolder.folderList.isNotEmpty()
-                ) {
-                    1
-                } else {
-                    0
-                }
-                val videoHeaderOffset = if (rootFolder.mediaList.isNotEmpty()) 1 else 0
-                folderHeaderOffset + folderSectionSize + spacerOffset + videoHeaderOffset + targetIndex
-            }
-        }
+        Logger.debug(
+            TAG,
+            "Restore last played media: mode=${uiState.preferences.mediaViewMode}, index=$scrollIndex, " +
+                "folders=${rootFolder.folderList.size}, videos=${rootFolder.mediaList.size}",
+        )
         lazyGridState.scrollToItem(scrollIndex)
-        restoredFolderPath = folderPath
+        restoredPlaybackAnchor = restoreToken
     }
 
     LaunchedEffect(selectionManager.isInSelectionMode) {
@@ -694,6 +687,48 @@ private fun DeleteConfirmationDialog(
             )
         },
     )
+}
+
+private fun resolveRestoreScrollIndex(
+    rootFolder: Folder,
+    mediaViewMode: MediaViewMode,
+    lastPlayedMediaUri: String?,
+    recentlyPlayedVideo: Video,
+): Int? {
+    val targetVideo = lastPlayedMediaUri
+        ?.let { uri -> rootFolder.allMediaList.firstOrNull { video -> video.uriString == uri } }
+        ?: recentlyPlayedVideo
+    val targetIndex = rootFolder.mediaList.indexOfFirst { video -> video.uriString == targetVideo.uriString }
+    if (targetIndex >= 0) {
+        return when (mediaViewMode) {
+            MediaViewMode.VIDEOS,
+            MediaViewMode.FOLDERS,
+            -> targetIndex
+
+            MediaViewMode.FOLDER_TREE -> rootFolder.folderTreeVideoGridIndex(targetIndex)
+        }
+    }
+
+    if (mediaViewMode == MediaViewMode.VIDEOS) return null
+    val folderIndex = rootFolder.folderList.indexOfFirst { folder -> folder.isRecentlyPlayedVideo(targetVideo) }
+    if (folderIndex < 0) return null
+
+    return when (mediaViewMode) {
+        MediaViewMode.FOLDERS -> folderIndex
+        MediaViewMode.FOLDER_TREE -> folderIndex + rootFolder.folderHeaderOffset
+        MediaViewMode.VIDEOS -> null
+    }
+}
+
+private const val TAG = "MediaPickerScreen"
+
+private val Folder.folderHeaderOffset: Int
+    get() = if (folderList.isNotEmpty()) 1 else 0
+
+private fun Folder.folderTreeVideoGridIndex(targetIndex: Int): Int {
+    val spacerOffset = if (folderList.isNotEmpty()) 1 else 0
+    val videoHeaderOffset = if (mediaList.isNotEmpty()) 1 else 0
+    return folderHeaderOffset + folderList.size + spacerOffset + videoHeaderOffset + targetIndex
 }
 
 private enum class MediaPickerDeleteAction {
