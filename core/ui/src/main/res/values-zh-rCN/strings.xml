@@ -215,6 +215,14 @@
     <string name="pip_settings">画中画模式</string>
     <string name="pip_settings_description">点按主屏幕按钮时自动切换到迷你播放器</string>
     <string name="open_subtitle">打开本地字幕</string>
+    <string name="add_online_subtitle">添加在线字幕</string>
+    <string name="online_subtitle_url">字幕 URL</string>
+    <string name="online_subtitle_add">添加</string>
+    <string name="online_subtitle_added">已添加在线字幕</string>
+    <string name="online_subtitle_unsupported_url">不支持的字幕 URL</string>
+    <string name="online_subtitle_too_large">在线字幕过大（最大 10MB）</string>
+    <string name="online_subtitle_empty">在线字幕为空</string>
+    <string name="online_subtitle_download_failed">下载在线字幕失败</string>
     <string name="no_subtitle_tracks_found">此视频的字幕不可用或不受支持</string>
     <string name="no_audio_tracks_found">此视频的音轨不可用或不受支持</string>
     <string name="rename_to">重命名为</string>

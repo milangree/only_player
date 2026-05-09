@@ -146,6 +146,7 @@ import one.next.player.feature.player.extensions.switchTrack
 import one.next.player.feature.player.extensions.uriToSubtitleConfiguration
 import one.next.player.feature.player.extensions.videoZoom
 import one.next.player.feature.player.subtitle.AssHandlerRegistry
+import one.next.player.feature.player.subtitle.OnlineSubtitleRepository
 
 @OptIn(UnstableApi::class)
 @AndroidEntryPoint
@@ -193,6 +194,9 @@ class PlayerService : MediaSessionService() {
 
     @Inject
     lateinit var mediaRepository: MediaRepository
+
+    @Inject
+    lateinit var onlineSubtitleRepository: OnlineSubtitleRepository
 
     @Inject
     lateinit var webDavClient: WebDavClient
@@ -1559,6 +1563,7 @@ class PlayerService : MediaSessionService() {
                         externalSubs = validExternalSubs,
                     )
                 }
+                validExternalSubs.forEach(onlineSubtitleRepository::touchSubtitle)
                 val existingSubConfigurations = mediaItem.localConfiguration?.subtitleConfigurations ?: emptyList()
                 val restoredSubConfigurations = validExternalSubs.map { subtitleUri ->
                     if (subtitleUri.scheme == "smb") {

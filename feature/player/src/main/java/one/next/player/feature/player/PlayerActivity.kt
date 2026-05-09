@@ -55,6 +55,7 @@ import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
@@ -78,6 +79,13 @@ import one.next.player.feature.player.extensions.uriToSubtitleConfiguration
 import one.next.player.feature.player.service.PlayerService
 import one.next.player.feature.player.service.addSubtitleTrack
 import one.next.player.feature.player.service.stopPlayerSession
+import one.next.player.feature.player.subtitle.EmptyOnlineSubtitleException
+import one.next.player.feature.player.subtitle.InvalidOnlineSubtitleExtensionException
+import one.next.player.feature.player.subtitle.InvalidOnlineSubtitleSchemeException
+import one.next.player.feature.player.subtitle.InvalidOnlineSubtitleUrlException
+import one.next.player.feature.player.subtitle.OnlineSubtitleDownloadFailedException
+import one.next.player.feature.player.subtitle.OnlineSubtitleRepository
+import one.next.player.feature.player.subtitle.OnlineSubtitleTooLargeException
 import one.next.player.feature.player.utils.PlayerApi
 
 internal data class PlaybackPlaylist(
@@ -158,6 +166,9 @@ class PlayerActivity : AppCompatActivity() {
 
     @Inject
     lateinit var mediaSynchronizer: MediaSynchronizer
+
+    @Inject
+    lateinit var onlineSubtitleRepository: OnlineSubtitleRepository
 
     private val viewModel: PlayerViewModel by viewModels()
     val playerPreferences get() = viewModel.uiState.value.playerPreferences
@@ -274,6 +285,7 @@ class PlayerActivity : AppCompatActivity() {
                             controllerFuture?.await()?.addSubtitleTrack(uri)
                         }
                     },
+                    onAddOnlineSubtitleClick = ::addOnlineSubtitle,
                     onBackClick = { finishAndStopPlayerSession() },
                     onPlayInBackgroundClick = {
                         shouldPlayInBackground = true
@@ -313,6 +325,9 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        lifecycleScope.launch(Dispatchers.IO) {
+            onlineSubtitleRepository.deleteExpiredSubtitles()
+        }
         lifecycleScope.launch {
             if (!ensureMediaPermission()) return@launch
 
@@ -364,6 +379,47 @@ class PlayerActivity : AppCompatActivity() {
             val sessionToken = SessionToken(applicationContext, ComponentName(applicationContext, PlayerService::class.java))
             controllerFuture = MediaController.Builder(applicationContext, sessionToken).buildAsync()
         }
+    }
+
+    private fun addOnlineSubtitle(subtitleUrl: String) {
+        if (subtitleUrl.isBlank()) {
+            showToast(one.next.player.core.ui.R.string.online_subtitle_empty)
+            return
+        }
+
+        lifecycleScope.launch {
+            val messageResId = try {
+                val downloadedSubtitle = withContext(Dispatchers.IO) {
+                    onlineSubtitleRepository.downloadSubtitle(subtitleUrl)
+                }
+                maybeInitControllerFuture()
+                val controller = controllerFuture?.await() ?: error("MediaController is unavailable")
+                controller.addSubtitleTrack(downloadedSubtitle.uri)
+                one.next.player.core.ui.R.string.online_subtitle_added
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: InvalidOnlineSubtitleSchemeException) {
+                one.next.player.core.ui.R.string.online_subtitle_unsupported_url
+            } catch (exception: InvalidOnlineSubtitleUrlException) {
+                one.next.player.core.ui.R.string.online_subtitle_unsupported_url
+            } catch (exception: InvalidOnlineSubtitleExtensionException) {
+                one.next.player.core.ui.R.string.online_subtitle_unsupported_url
+            } catch (exception: OnlineSubtitleTooLargeException) {
+                one.next.player.core.ui.R.string.online_subtitle_too_large
+            } catch (exception: EmptyOnlineSubtitleException) {
+                one.next.player.core.ui.R.string.online_subtitle_empty
+            } catch (exception: OnlineSubtitleDownloadFailedException) {
+                one.next.player.core.ui.R.string.online_subtitle_download_failed
+            } catch (exception: Exception) {
+                Logger.error(TAG, "Failed to add online subtitle", exception)
+                one.next.player.core.ui.R.string.online_subtitle_download_failed
+            }
+            showToast(messageResId)
+        }
+    }
+
+    private fun showToast(messageResId: Int) {
+        Toast.makeText(this@PlayerActivity, messageResId, Toast.LENGTH_SHORT).show()
     }
 
     private fun startPlayback() {

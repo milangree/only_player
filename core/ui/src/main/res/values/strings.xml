@@ -221,6 +221,15 @@
     <string name="volume_boost">Volume boost</string>
     <string name="volume_boost_desc">Boost audio volume up to 200%</string>
     <string name="open_subtitle">Open local subtitle</string>
+    <string name="add_online_subtitle">Add online subtitle</string>
+    <string name="online_subtitle_url">Subtitle URL</string>
+    <string name="online_subtitle_url_example" translatable="false">https://example.com/subtitle.srt</string>
+    <string name="online_subtitle_add">Add</string>
+    <string name="online_subtitle_added">Online subtitle added</string>
+    <string name="online_subtitle_unsupported_url">Unsupported subtitle URL</string>
+    <string name="online_subtitle_too_large">Online subtitle is too large (max 10MB)</string>
+    <string name="online_subtitle_empty">Online subtitle is empty</string>
+    <string name="online_subtitle_download_failed">Failed to download online subtitle</string>
     <string name="no_subtitle_tracks_found">Subtitle tracks for this video are either unavailable or not supported.</string>
     <string name="no_audio_tracks_found">Audio tracks for this video are either unavailable or not supported.</string>
     <string name="rename">Rename</string>

@@ -16,11 +16,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,11 +59,14 @@ fun BoxScope.SubtitleSelectorView(
     shouldShow: Boolean,
     player: Player,
     onSelectSubtitleClick: () -> Unit,
+    onAddOnlineSubtitleClick: (String) -> Unit,
     onEvent: (SubtitleOptionsEvent) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val subtitleTracksState = rememberTracksState(player, C.TRACK_TYPE_TEXT)
     val subtitleOptionsState = rememberSubtitleOptionsState(player, onEvent)
+    var isOnlineSubtitleDialogVisible by remember { mutableStateOf(false) }
+    var onlineSubtitleUrl by remember { mutableStateOf("") }
 
     OverlayView(
         modifier = modifier,
@@ -109,6 +114,17 @@ fun BoxScope.SubtitleSelectorView(
                 Text(text = stringResource(R.string.open_subtitle))
             }
             Spacer(modifier = Modifier.size(16.dp))
+            FilledTonalButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_add_online_subtitle"),
+                onClick = {
+                    isOnlineSubtitleDialogVisible = true
+                },
+            ) {
+                Text(text = stringResource(R.string.add_online_subtitle))
+            }
+            Spacer(modifier = Modifier.size(16.dp))
             DelayInput(
                 value = subtitleOptionsState.delayMilliseconds,
                 onValueChange = { subtitleOptionsState.setDelay(it) },
@@ -119,6 +135,57 @@ fun BoxScope.SubtitleSelectorView(
                 onValueChange = { subtitleOptionsState.setSpeed(it) },
             )
         }
+    }
+
+    if (isOnlineSubtitleDialogVisible) {
+        AlertDialog(
+            modifier = Modifier.testTag("dialog_online_subtitle"),
+            onDismissRequest = { isOnlineSubtitleDialogVisible = false },
+            title = {
+                Text(text = stringResource(R.string.add_online_subtitle))
+            },
+            text = {
+                OutlinedTextField(
+                    value = onlineSubtitleUrl,
+                    onValueChange = { onlineSubtitleUrl = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_online_subtitle_url"),
+                    label = {
+                        Text(text = stringResource(R.string.online_subtitle_url))
+                    },
+                    placeholder = {
+                        Text(text = stringResource(R.string.online_subtitle_url_example))
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    modifier = Modifier.testTag("btn_confirm_online_subtitle"),
+                    enabled = onlineSubtitleUrl.isNotBlank(),
+                    onClick = {
+                        onAddOnlineSubtitleClick(onlineSubtitleUrl.trim())
+                        onlineSubtitleUrl = ""
+                        isOnlineSubtitleDialogVisible = false
+                        onDismiss()
+                    },
+                ) {
+                    Text(text = stringResource(R.string.online_subtitle_add))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    modifier = Modifier.testTag("btn_cancel_online_subtitle"),
+                    onClick = { isOnlineSubtitleDialogVisible = false },
+                ) {
+                    Text(text = stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 
