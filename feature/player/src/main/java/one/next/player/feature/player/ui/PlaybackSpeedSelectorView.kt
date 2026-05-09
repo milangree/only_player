@@ -65,15 +65,14 @@ fun BoxScope.PlaybackSpeedSelectorView(
         ) {
             val minValue = 0.2f
             val maxValue = 4.0f
-            val stepSize = 0.1f
-            val steps = ((maxValue - minValue) / stepSize).toInt() - 1
+            val stepSize = 0.01f
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FilledTonalIconButton(
                     onClick = {
                         val newSpeed =
-                            (playbackParametersState.speed - stepSize).coerceAtLeast(minValue)
+                            (playbackParametersState.speed - stepSize).coerceAtLeast(minValue).round(2)
                         playbackParametersState.setPlaybackSpeed(newSpeed)
                     },
                 ) {
@@ -92,7 +91,7 @@ fun BoxScope.PlaybackSpeedSelectorView(
 
                 FilledTonalIconButton(
                     onClick = {
-                        val newSpeed = (playbackParametersState.speed + stepSize).coerceAtMost(maxValue)
+                        val newSpeed = (playbackParametersState.speed + stepSize).coerceAtMost(maxValue).round(2)
                         playbackParametersState.setPlaybackSpeed(newSpeed)
                     },
                 ) {
@@ -108,10 +107,9 @@ fun BoxScope.PlaybackSpeedSelectorView(
                 Slider(
                     value = playbackParametersState.speed,
                     valueRange = minValue..maxValue,
-                    steps = steps,
                     onValueChange = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        playbackParametersState.setPlaybackSpeed(it)
+                        playbackParametersState.setPlaybackSpeed(it.round(2))
                     },
                     modifier = Modifier.weight(1f),
                 )

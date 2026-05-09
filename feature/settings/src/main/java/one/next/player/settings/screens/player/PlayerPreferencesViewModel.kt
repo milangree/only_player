@@ -126,7 +126,7 @@ class PlayerPreferencesViewModel @Inject constructor(
     private fun updateDefaultPlaybackSpeed(value: Float) {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
-                it.copy(defaultPlaybackSpeed = value.round(1))
+                it.copy(defaultPlaybackSpeed = value.round(2))
             }
         }
     }

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import one.next.player.core.common.extensions.isPipFeatureSupported
+import one.next.player.core.common.extensions.round
 import one.next.player.core.model.ControlButtonsPosition
 import one.next.player.core.model.PlayerPreferences
 import one.next.player.core.model.ScreenOrientation
@@ -138,7 +139,7 @@ private fun PlayerPreferencesContent(
                     icon = NextIcons.Speed,
                     value = uiState.preferences.defaultPlaybackSpeed,
                     valueRange = 0.2f..4.0f,
-                    onValueChange = { onEvent(PlayerPreferencesUiEvent.UpdateDefaultPlaybackSpeed(it)) },
+                    onValueChange = { onEvent(PlayerPreferencesUiEvent.UpdateDefaultPlaybackSpeed(it.round(2))) },
                     trailingContent = {
                         FilledIconButton(onClick = { onEvent(PlayerPreferencesUiEvent.UpdateDefaultPlaybackSpeed(1f)) }) {
                             Icon(

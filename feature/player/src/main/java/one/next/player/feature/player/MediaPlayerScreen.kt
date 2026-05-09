@@ -1,5 +1,6 @@
 package one.next.player.feature.player
 
+import android.content.res.Configuration
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -54,6 +55,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -267,6 +269,8 @@ internal fun MediaPlayerScreen(
     var previewPlayerControlsLayout by remember { mutableStateOf<PlayerControlsLayout?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val shouldShowPlayerTitle = configuration.orientation != Configuration.ORIENTATION_PORTRAIT
     val sleepTimerState = rememberSleepTimerState(player = player)
     val permanentlyVisibleControls = remember {
         setOf(
@@ -617,7 +621,7 @@ internal fun MediaPlayerScreen(
                                 exit = fadeOut(),
                             ) {
                                 ControlsTopView(
-                                    title = metadataState.title ?: "",
+                                    title = (metadataState.title ?: "").takeIf { shouldShowPlayerTitle }.orEmpty(),
                                     player = player,
                                     topRightControls = topRightControls,
                                     visiblePlayerControls = visiblePlayerControls,
