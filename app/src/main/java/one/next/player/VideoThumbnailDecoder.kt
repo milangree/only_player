@@ -20,6 +20,8 @@ import coil3.request.Options
 import coil3.toAndroidUri
 import io.github.anilbeesetti.nextlib.mediainfo.MediaInfoBuilder
 import kotlin.math.abs
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okio.FileSystem
 import one.next.player.core.common.Logger
 
@@ -31,10 +33,9 @@ class VideoThumbnailDecoder(
 ) : Decoder {
 
     companion object {
-        private const val TAG = "VideoThumbnailDecoder"
-
         // 缩略图最大尺寸，避免 4K 全分辨率 Bitmap 占用过多内存
         private const val MAX_THUMBNAIL_SIZE = 512
+        private val mediaInfoSemaphore = Semaphore(1)
     }
 
     // 优先使用系统缩略图服务，质量优于 FFmpeg 提取帧
@@ -53,10 +54,10 @@ class VideoThumbnailDecoder(
                 Size(MAX_THUMBNAIL_SIZE, MAX_THUMBNAIL_SIZE),
                 null,
             ).also {
-                Logger.info(TAG, "systemThumbnail ok ${System.currentTimeMillis() - start}ms uri=$uri")
+                logThumbnail { "systemThumbnail ok ${System.currentTimeMillis() - start}ms uri=$uri" }
             }
         } catch (e: Exception) {
-            Logger.info(TAG, "systemThumbnail fail ${System.currentTimeMillis() - start}ms uri=$uri err=${e.message}")
+            logThumbnail { "systemThumbnail fail ${System.currentTimeMillis() - start}ms uri=$uri err=${e.message}" }
             null
         }
     }
@@ -85,7 +86,7 @@ class VideoThumbnailDecoder(
         }
     }
 
-    private val diskCacheKey: String
+    private val sourceCacheKey: String
         get() = options.diskCacheKey ?: run {
             val metadata = source.metadata
             when {
@@ -95,9 +96,13 @@ class VideoThumbnailDecoder(
             }
         }
 
+    private val diskCacheKey: String
+        get() = "$sourceCacheKey#thumbnail=${strategy.cacheKey}"
+
     @OptIn(ExperimentalCoilApi::class)
     override suspend fun decode(): DecodeResult {
-        Logger.info(TAG, "decode start key=$diskCacheKey")
+        val key = diskCacheKey
+        logThumbnail { "decode start strategy=${strategy.logName} key=$key" }
         readFromDiskCache()?.use { snapshot ->
             val file = snapshot.data.toFile()
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -111,26 +116,32 @@ class VideoThumbnailDecoder(
             )
 
             if (cachedBitmap != null) {
+                logThumbnail { "diskCache hit strategy=${strategy.logName} key=$key" }
                 return DecodeResult(
                     image = cachedBitmap.toDrawable(options.context.resources).asImage(),
                     isSampled = true,
                 )
             }
         }
+        logThumbnail { "diskCache miss strategy=${strategy.logName} key=$key" }
 
-        // 系统缩略图快速路径（content:// URI，由系统优化且自带缓存）
-        tryLoadSystemThumbnail()?.let { systemBitmap ->
-            val bitmap = writeToDiskCache(systemBitmap)
-            return DecodeResult(
-                image = bitmap.toDrawable(options.context.resources).asImage(),
-                isSampled = true,
-            )
+        if (strategy is ThumbnailStrategy.FirstFrame) {
+            tryLoadSystemThumbnail()?.let { systemBitmap ->
+                val bitmap = writeToDiskCache(systemBitmap)
+                return DecodeResult(
+                    image = bitmap.toDrawable(options.context.resources).asImage(),
+                    isSampled = true,
+                )
+            }
+        } else {
+            logThumbnail { "systemThumbnail skip strategy=${strategy.logName} key=$key" }
         }
 
-        // FFmpeg 提取帧（全格式通用，不阻塞）
-        val ffmpegStart = System.currentTimeMillis()
-        getThumbnailFromMediaInfo()?.scaleToFit()?.let { rawBitmap ->
-            Logger.info(TAG, "mediaInfo ok ${System.currentTimeMillis() - ffmpegStart}ms key=$diskCacheKey")
+        val mediaInfoStart = System.currentTimeMillis()
+        mediaInfoSemaphore.withPermit {
+            getThumbnailFromMediaInfo()
+        }?.scaleToFit()?.let { rawBitmap ->
+            logThumbnail { "mediaInfo ok ${System.currentTimeMillis() - mediaInfoStart}ms strategy=${strategy.logName} key=$key" }
             val bitmap = writeToDiskCache(rawBitmap)
             return DecodeResult(
                 image = bitmap.toDrawable(options.context.resources).asImage(),
@@ -138,11 +149,18 @@ class VideoThumbnailDecoder(
             )
         }
 
-        throw IllegalStateException("Failed to get video thumbnail for key=$diskCacheKey")
+        logThumbnail { "decode fail strategy=${strategy.logName} key=$key" }
+        throw IllegalStateException("Failed to get video thumbnail for key=$key")
     }
 
     private fun getThumbnailFromMediaInfo(): Bitmap? {
+        val key = diskCacheKey
         val metadata = source.metadata
+        val mediaInfoSource = when {
+            metadata is ContentMetadata -> "contentUri=${metadata.uri}"
+            source.fileSystem === FileSystem.SYSTEM -> "filePath=${source.file().toFile().path}"
+            else -> "unsupported"
+        }
         val mediaInfo = try {
             when {
                 metadata is ContentMetadata -> {
@@ -159,27 +177,47 @@ class VideoThumbnailDecoder(
                 else -> null
             }
         } catch (e: Exception) {
+            logThumbnail { "mediaInfo build fail strategy=${strategy.logName} source=$mediaInfoSource err=${e.message}" }
             null
         } ?: return null
 
         return try {
+            val duration = mediaInfo.duration
+            logThumbnail { "mediaInfo built strategy=${strategy.logName} duration=$duration source=$mediaInfoSource key=$key" }
             when (strategy) {
-                is ThumbnailStrategy.FirstFrame -> mediaInfo.getFrame()
+                is ThumbnailStrategy.FirstFrame -> {
+                    mediaInfo.getFrame().also { frame ->
+                        logThumbnail { "mediaInfo firstFrame result=${frame != null} key=$key" }
+                    }
+                }
                 is ThumbnailStrategy.FrameAtPercentage -> {
-                    val timeMs = (mediaInfo.duration * strategy.percentage).toLong()
-                    mediaInfo.getFrameAt(timeMs)
+                    val timeMs = (duration * strategy.percentage).toLong()
+                    mediaInfo.getFrameAt(timeMs).also { frame ->
+                        logThumbnail { "mediaInfo frameAt timeMs=$timeMs result=${frame != null} key=$key" }
+                    }
                 }
                 is ThumbnailStrategy.Hybrid -> {
                     val firstFrame = mediaInfo.getFrame()
-                    if (firstFrame != null && isSolidColor(firstFrame)) {
-                        val timeMs = (mediaInfo.duration * strategy.percentage).toLong()
-                        mediaInfo.getFrameAt(timeMs) ?: firstFrame
+                    val isFirstFrameSolid = firstFrame != null && isSolidColor(firstFrame)
+                    logThumbnail { "mediaInfo hybrid firstFrame=${firstFrame != null} solid=$isFirstFrameSolid key=$key" }
+                    if (firstFrame != null && isFirstFrameSolid) {
+                        val timeMs = (duration * strategy.percentage).toLong()
+                        val fallbackFrame = mediaInfo.getFrameAt(timeMs).also { frame ->
+                            logThumbnail { "mediaInfo hybrid fallback timeMs=$timeMs result=${frame != null} key=$key" }
+                        }
+                        if (fallbackFrame != null) {
+                            firstFrame.recycle()
+                            fallbackFrame
+                        } else {
+                            firstFrame
+                        }
                     } else {
                         firstFrame
                     }
                 }
             }
         } catch (e: Exception) {
+            logThumbnail { "mediaInfo frame fail strategy=${strategy.logName} key=$key err=${e.message}" }
             null
         } finally {
             mediaInfo.release()
@@ -243,12 +281,14 @@ class VideoThumbnailDecoder(
             options: Options,
             imageLoader: ImageLoader,
         ): Decoder? {
-            Logger.info(TAG, "Factory.create mimeType=${result.mimeType}")
+            logThumbnail { "factory create mimeType=${result.mimeType}" }
             if (!isApplicable(result.mimeType)) return null
+            val strategy = thumbnailStrategy()
+            logThumbnail { "factory strategy=${strategy.logName}" }
             return VideoThumbnailDecoder(
                 source = result.source,
                 options = options,
-                strategy = thumbnailStrategy(),
+                strategy = strategy,
                 diskCache = lazy { imageLoader.diskCache },
             )
         }
@@ -261,6 +301,27 @@ sealed class ThumbnailStrategy {
     data object FirstFrame : ThumbnailStrategy()
     data class FrameAtPercentage(val percentage: Float = 0.5f) : ThumbnailStrategy()
     data class Hybrid(val percentage: Float = 0.5f) : ThumbnailStrategy()
+}
+
+private val ThumbnailStrategy.logName: String
+    get() = when (this) {
+        ThumbnailStrategy.FirstFrame -> "firstFrame"
+        is ThumbnailStrategy.FrameAtPercentage -> "frameAt:$percentage"
+        is ThumbnailStrategy.Hybrid -> "hybrid:$percentage"
+    }
+
+private val ThumbnailStrategy.cacheKey: String
+    get() = when (this) {
+        ThumbnailStrategy.FirstFrame -> "first"
+        is ThumbnailStrategy.FrameAtPercentage -> "frameAt:$percentage"
+        is ThumbnailStrategy.Hybrid -> "hybrid:$percentage"
+    }
+
+private inline fun logThumbnail(message: () -> String) {
+    if (BuildConfig.DEBUG) {
+        // 保持完整日志 tag 不超过旧系统 23 字符限制。
+        Logger.info("VideoThumb", message())
+    }
 }
 
 private fun isSolidColor(bitmap: Bitmap, threshold: Float = 0.7f): Boolean {
