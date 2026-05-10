@@ -1,16 +1,10 @@
-- 新增播放器内视频滤镜
-- 新增在线字幕直链支持与校验
-- 新增经典播放器图标选项
-- 修复软解码与视频滤镜兼容状态提示
-- 修复记忆音量默认值被上限压低的问题
+- 修复视频缩略图未遵循指定帧策略的问题
+- 修复自定义播放器按钮移动到底部后无法点击的问题
 
 <details>
 <summary>English Version</summary>
 
-- Add in-player video filters
-- Add online subtitle direct link support and validation
-- Add classic player icons option
-- Fix software decoder and video filter compatibility status hints
-- Fix remembered volume being capped by default
+- Fix video thumbnails not respecting the selected frame strategy
+- Fix customized player controls not responding after being moved to the bottom bar
 
 </details>

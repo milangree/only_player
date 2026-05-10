@@ -749,6 +749,38 @@ internal fun MediaPlayerScreen(
                                     visiblePlayerControls = visiblePlayerControls,
                                     onSeek = seekGestureState::onSeek,
                                     onSeekEnd = seekGestureState::onSeekEnd,
+                                    onPlaylistClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.PLAYLIST)
+                                        } else {
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.PLAYLIST
+                                        }
+                                    },
+                                    onPlaybackSpeedClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.PLAYBACK_SPEED)
+                                        } else {
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.PLAYBACK_SPEED
+                                        }
+                                    },
+                                    onAudioClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.AUDIO)
+                                        } else {
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.AUDIO_SELECTOR
+                                        }
+                                    },
+                                    onSubtitleClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.SUBTITLE)
+                                        } else {
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.SUBTITLE_SELECTOR
+                                        }
+                                    },
                                     onRotateClick = {
                                         rotationState.rotate()
                                     },
