@@ -177,6 +177,11 @@
     <string name="video_hue">色相</string>
     <string name="video_gamma">Gamma</string>
     <string name="video_sharpening">视频锐化</string>
+    <string name="reset_video_brightness">重置视频亮度</string>
+    <string name="reset_video_contrast">重置视频对比度</string>
+    <string name="reset_video_saturation">重置视频饱和度</string>
+    <string name="reset_video_hue">重置视频色相</string>
+    <string name="reset_video_gamma">重置视频 Gamma</string>
     <string name="reset_video_sharpening">重置视频锐化</string>
     <string name="zoom_gesture">缩放手势</string>
     <string name="zoom_gesture_description">捏合可缩放视频</string>

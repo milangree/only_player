@@ -120,6 +120,11 @@
     <string name="video_hue">色相</string>
     <string name="video_gamma">Gamma</string>
     <string name="video_sharpening">影片銳化</string>
+    <string name="reset_video_brightness">重設影片亮度</string>
+    <string name="reset_video_contrast">重設影片對比度</string>
+    <string name="reset_video_saturation">重設影片飽和度</string>
+    <string name="reset_video_hue">重設影片色相</string>
+    <string name="reset_video_gamma">重設影片 Gamma</string>
     <string name="reset_video_sharpening">重設影片銳化</string>
     <string name="error_playing_video">錯誤：無法播放影片</string>
     <string name="controls_lock">鎖定控制元件</string>

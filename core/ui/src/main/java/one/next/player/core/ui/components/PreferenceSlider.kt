@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun PreferenceSlider(
     modifier: Modifier = Modifier,
+    sliderModifier: Modifier = Modifier,
     title: String,
     description: String? = null,
     icon: ImageVector? = null,
@@ -50,7 +51,7 @@ fun PreferenceSlider(
                     Text(text = description)
                 }
                 Slider(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = sliderModifier.fillMaxWidth(),
                     enabled = isEnabled,
                     value = value,
                     valueRange = valueRange,

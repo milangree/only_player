@@ -127,6 +127,7 @@ fun SettingsScreen(
         ) {
             filteredRows.forEachIndexed { index, resolved ->
                 ClickablePreferenceItem(
+                    modifier = Modifier.testTag("item_settings_${resolved.row.setting.name.lowercase()}"),
                     title = resolved.title,
                     description = resolved.description,
                     icon = resolved.row.icon,

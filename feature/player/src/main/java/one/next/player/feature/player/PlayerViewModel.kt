@@ -129,6 +129,20 @@ class PlayerViewModel @Inject constructor(
         updateVideoFilter("brightness=$normalizedValue") { it.copy(videoBrightness = normalizedValue) }
     }
 
+    fun updateVideoFilters(preferences: PlayerPreferences) {
+        val normalizedPreferences = preferences.normalizedVideoFilters()
+        updateVideoFilter("confirmed=$normalizedPreferences") {
+            it.copy(
+                videoBrightness = normalizedPreferences.videoBrightness,
+                videoContrast = normalizedPreferences.videoContrast,
+                videoSaturation = normalizedPreferences.videoSaturation,
+                videoHue = normalizedPreferences.videoHue,
+                videoGamma = normalizedPreferences.videoGamma,
+                videoSharpening = normalizedPreferences.videoSharpening,
+            )
+        }
+    }
+
     fun updateVideoContrast(value: Float) {
         val normalizedValue = value.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_CONTRAST, PlayerPreferences.MAX_VIDEO_CONTRAST)
         updateVideoFilter("contrast=$normalizedValue") { it.copy(videoContrast = normalizedValue) }
@@ -153,6 +167,15 @@ class PlayerViewModel @Inject constructor(
         val normalizedValue = normalizeVideoSharpening(value)
         updateVideoFilter("sharpening=$normalizedValue") { it.copy(videoSharpening = normalizedValue) }
     }
+
+    private fun PlayerPreferences.normalizedVideoFilters(): PlayerPreferences = copy(
+        videoBrightness = videoBrightness.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_BRIGHTNESS, PlayerPreferences.MAX_VIDEO_BRIGHTNESS),
+        videoContrast = videoContrast.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_CONTRAST, PlayerPreferences.MAX_VIDEO_CONTRAST),
+        videoSaturation = videoSaturation.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_SATURATION, PlayerPreferences.MAX_VIDEO_SATURATION, decimals = 0),
+        videoHue = videoHue.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_HUE, PlayerPreferences.MAX_VIDEO_HUE, decimals = 0),
+        videoGamma = videoGamma.normalizeVideoFilter(PlayerPreferences.MIN_VIDEO_GAMMA, PlayerPreferences.MAX_VIDEO_GAMMA),
+        videoSharpening = normalizeVideoSharpening(videoSharpening),
+    )
 
     private fun updateVideoFilter(
         debugValue: String,

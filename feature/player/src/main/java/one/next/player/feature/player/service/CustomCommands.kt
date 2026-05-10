@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import kotlinx.coroutines.guava.await
+import one.next.player.core.model.PlayerPreferences
 
 enum class CustomCommands(val customAction: String) {
     ADD_SUBTITLE_TRACK(customAction = "ADD_SUBTITLE_TRACK"),
@@ -22,6 +23,7 @@ enum class CustomCommands(val customAction: String) {
     IS_LOUDNESS_GAIN_SUPPORTED(customAction = "IS_LOUDNESS_GAIN_SUPPORTED"),
     SET_LOUDNESS_GAIN(customAction = "SET_LOUDNESS_GAIN"),
     GET_LOUDNESS_GAIN(customAction = "GET_LOUDNESS_GAIN"),
+    PREVIEW_VIDEO_FILTERS(customAction = "PREVIEW_VIDEO_FILTERS"),
     ;
 
     val sessionCommand = SessionCommand(customAction, Bundle.EMPTY)
@@ -40,6 +42,12 @@ enum class CustomCommands(val customAction: String) {
         const val SUBTITLE_SPEED_KEY = "subtitle_speed"
         const val LOUDNESS_GAIN_KEY = "loudness_gain"
         const val IS_LOUDNESS_GAIN_SUPPORTED_KEY = "is_loudness_gain_supported"
+        const val VIDEO_BRIGHTNESS_KEY = "video_brightness"
+        const val VIDEO_CONTRAST_KEY = "video_contrast"
+        const val VIDEO_SATURATION_KEY = "video_saturation"
+        const val VIDEO_HUE_KEY = "video_hue"
+        const val VIDEO_GAMMA_KEY = "video_gamma"
+        const val VIDEO_SHARPENING_KEY = "video_sharpening"
     }
 }
 
@@ -123,6 +131,18 @@ fun MediaController.setLoudnessGain(gain: Int) {
         putInt(CustomCommands.LOUDNESS_GAIN_KEY, gain)
     }
     sendCustomCommand(CustomCommands.SET_LOUDNESS_GAIN.sessionCommand, args)
+}
+
+fun MediaController.previewVideoFilters(preferences: PlayerPreferences) {
+    val args = Bundle().apply {
+        putFloat(CustomCommands.VIDEO_BRIGHTNESS_KEY, preferences.videoBrightness)
+        putFloat(CustomCommands.VIDEO_CONTRAST_KEY, preferences.videoContrast)
+        putFloat(CustomCommands.VIDEO_SATURATION_KEY, preferences.videoSaturation)
+        putFloat(CustomCommands.VIDEO_HUE_KEY, preferences.videoHue)
+        putFloat(CustomCommands.VIDEO_GAMMA_KEY, preferences.videoGamma)
+        putFloat(CustomCommands.VIDEO_SHARPENING_KEY, preferences.videoSharpening)
+    }
+    sendCustomCommand(CustomCommands.PREVIEW_VIDEO_FILTERS.sessionCommand, args)
 }
 
 suspend fun MediaController.getLoudnessGain(): Int {

@@ -88,6 +88,7 @@ import one.next.player.feature.player.buttons.PreviousButton
 import one.next.player.feature.player.extensions.nameRes
 import one.next.player.feature.player.extensions.seekByRequestedOffset
 import one.next.player.feature.player.input.PlayerKeyboardController
+import one.next.player.feature.player.service.previewVideoFilters
 import one.next.player.feature.player.state.ControlsVisibilityState
 import one.next.player.feature.player.state.VerticalGesture
 import one.next.player.feature.player.state.rememberBrightnessState
@@ -923,12 +924,10 @@ internal fun MediaPlayerScreen(
         VideoFiltersDialog(
             preferences = playerPreferences,
             onDismissRequest = { isVideoFiltersDialogShown = false },
-            onBrightnessChanged = viewModel::updateVideoBrightness,
-            onContrastChanged = viewModel::updateVideoContrast,
-            onSaturationChanged = viewModel::updateVideoSaturation,
-            onHueChanged = viewModel::updateVideoHue,
-            onGammaChanged = viewModel::updateVideoGamma,
-            onSharpeningChanged = viewModel::updateVideoSharpening,
+            onPreviewPreferences = { previewPreferences ->
+                (player as? androidx.media3.session.MediaController)?.previewVideoFilters(previewPreferences)
+            },
+            onConfirmPreferences = viewModel::updateVideoFilters,
         )
     }
 

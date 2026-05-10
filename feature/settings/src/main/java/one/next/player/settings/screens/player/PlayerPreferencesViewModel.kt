@@ -205,7 +205,6 @@ data class PlayerPreferencesUiState(
 sealed interface PlayerPreferenceDialog {
     data object PlayerScreenOrientationDialog : PlayerPreferenceDialog
     data object ControlButtonsDialog : PlayerPreferenceDialog
-    data object VideoFiltersDialog : PlayerPreferenceDialog
 }
 
 sealed interface PlayerPreferencesUiEvent {

@@ -161,7 +161,7 @@ internal fun PlayerCustomizableControlButton(
                 isOutlineOnly = isPlaceholder,
             ) {
                 Icon(
-                    imageVector = NextIcons.Appearance,
+                    imageVector = NextIcons.Sensitivity,
                     contentDescription = "btn_video_filters",
                 )
             }

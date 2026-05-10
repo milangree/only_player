@@ -190,6 +190,11 @@
     <string name="video_hue">Hue</string>
     <string name="video_gamma">Gamma</string>
     <string name="video_sharpening">Video sharpening</string>
+    <string name="reset_video_brightness">Reset video brightness</string>
+    <string name="reset_video_contrast">Reset video contrast</string>
+    <string name="reset_video_saturation">Reset video saturation</string>
+    <string name="reset_video_hue">Reset video hue</string>
+    <string name="reset_video_gamma">Reset video gamma</string>
     <string name="reset_video_sharpening">Reset video sharpening</string>
     <string name="zoom_gesture">Zoom gesture</string>
     <string name="zoom_gesture_description">Pinch to zoom the video</string>

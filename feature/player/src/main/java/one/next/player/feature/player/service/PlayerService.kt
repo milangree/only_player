@@ -696,6 +696,7 @@ class PlayerService : MediaSessionService() {
 
         override fun onPlayerError(error: PlaybackException) {
             super.onPlayerError(error)
+            Logger.error(TAG, "Player error: code=${error.errorCode} name=${error.errorCodeName}", error)
             if (retryWithSoftwareDecoder(error)) return
             retryWithFixedSource(error)
         }
@@ -1141,14 +1142,41 @@ class PlayerService : MediaSessionService() {
             }
             if (preferencesRepository.playerPreferences.value.toVideoFilterPreferences() != videoFilters) return@launch
 
-            currentVideoFilters = videoFilters
-            player.setVideoEffects(effects)
+            applyVideoEffects(player, videoFilters, effects)
             Logger.debug(TAG, "Apply video filters: $videoFilters effects=${effects.size}")
         }.also { job ->
             job.invokeOnCompletion {
                 if (pendingVideoFiltersJob == job) pendingVideoFiltersJob = null
             }
         }
+    }
+
+    private fun previewVideoFilters(preferences: PlayerPreferences) {
+        val player = mediaSession?.player as? ExoPlayer ?: return
+        val videoFilters = preferences.toVideoFilterPreferences()
+        pendingVideoFiltersJob?.cancel()
+        if (currentVideoFilters == videoFilters) return
+
+        pendingVideoFiltersJob = serviceScope.launch {
+            val effects = withContext(Dispatchers.Default) {
+                videoFilters.toVideoEffects()
+            }
+            applyVideoEffects(player, videoFilters, effects)
+            Logger.debug(TAG, "Preview video filters: $videoFilters effects=${effects.size}")
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (pendingVideoFiltersJob == job) pendingVideoFiltersJob = null
+            }
+        }
+    }
+
+    private fun applyVideoEffects(
+        player: ExoPlayer,
+        videoFilters: VideoFilterPreferences,
+        effects: List<Effect>,
+    ) {
+        currentVideoFilters = videoFilters
+        player.setVideoEffects(effects)
     }
 
     private fun PlayerPreferences.toVideoFilterPreferences(): VideoFilterPreferences = VideoFilterPreferences(
@@ -1158,6 +1186,15 @@ class PlayerService : MediaSessionService() {
         hue = videoHue.coerceIn(PlayerPreferences.MIN_VIDEO_HUE, PlayerPreferences.MAX_VIDEO_HUE),
         gamma = videoGamma.coerceIn(PlayerPreferences.MIN_VIDEO_GAMMA, PlayerPreferences.MAX_VIDEO_GAMMA),
         sharpening = videoSharpening.coerceIn(PlayerPreferences.DEFAULT_VIDEO_SHARPENING, PlayerPreferences.MAX_VIDEO_SHARPENING),
+    )
+
+    private fun Bundle.toVideoFilterPreferences(): PlayerPreferences = PlayerPreferences(
+        videoBrightness = getFloat(CustomCommands.VIDEO_BRIGHTNESS_KEY, PlayerPreferences.DEFAULT_VIDEO_BRIGHTNESS),
+        videoContrast = getFloat(CustomCommands.VIDEO_CONTRAST_KEY, PlayerPreferences.DEFAULT_VIDEO_CONTRAST),
+        videoSaturation = getFloat(CustomCommands.VIDEO_SATURATION_KEY, PlayerPreferences.DEFAULT_VIDEO_SATURATION),
+        videoHue = getFloat(CustomCommands.VIDEO_HUE_KEY, PlayerPreferences.DEFAULT_VIDEO_HUE),
+        videoGamma = getFloat(CustomCommands.VIDEO_GAMMA_KEY, PlayerPreferences.DEFAULT_VIDEO_GAMMA),
+        videoSharpening = getFloat(CustomCommands.VIDEO_SHARPENING_KEY, PlayerPreferences.DEFAULT_VIDEO_SHARPENING),
     )
 
     private suspend fun VideoFilterPreferences.toVideoEffects(): List<Effect> = buildList {
@@ -1386,6 +1423,11 @@ class PlayerService : MediaSessionService() {
                             putInt(CustomCommands.LOUDNESS_GAIN_KEY, requestedVolumeGain)
                         },
                     )
+                }
+
+                CustomCommands.PREVIEW_VIDEO_FILTERS -> {
+                    previewVideoFilters(args.toVideoFilterPreferences())
+                    return@future SessionResult(SessionResult.RESULT_SUCCESS)
                 }
 
                 CustomCommands.GET_SUBTITLE_DELAY -> {
