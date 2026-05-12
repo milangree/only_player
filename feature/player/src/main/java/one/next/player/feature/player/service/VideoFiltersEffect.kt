@@ -117,7 +117,7 @@ internal class VideoFiltersEffect(
     private companion object {
         private const val POSITION_COMPONENT_COUNT = 4
         private const val VERTEX_COUNT = 4
-        private const val SHARPNESS_SCALE = 1.25f
+        private const val SHARPNESS_SCALE = 0.6f
 
         private const val VERTEX_SHADER = """
             #version 100
@@ -189,12 +189,12 @@ internal class VideoFiltersEffect(
               vec3 centerColor = applyColorFilters(center.rgb);
 
               if (uSharpness > 0.0) {
-                vec3 north = applyColorFilters(texture2D(uTexSampler, vTexSamplingCoord + vec2(0.0, -uTexelSize.y)).rgb);
-                vec3 south = applyColorFilters(texture2D(uTexSampler, vTexSamplingCoord + vec2(0.0, uTexelSize.y)).rgb);
-                vec3 west = applyColorFilters(texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, 0.0)).rgb);
-                vec3 east = applyColorFilters(texture2D(uTexSampler, vTexSamplingCoord + vec2(uTexelSize.x, 0.0)).rgb);
-                vec3 blur = (north + south + west + east) * 0.25;
-                centerColor = clamp(centerColor + (centerColor - blur) * uSharpness, 0.0, 1.0);
+                vec3 north = texture2D(uTexSampler, vTexSamplingCoord + vec2(0.0, -uTexelSize.y)).rgb;
+                vec3 south = texture2D(uTexSampler, vTexSamplingCoord + vec2(0.0, uTexelSize.y)).rgb;
+                vec3 west = texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, 0.0)).rgb;
+                vec3 east = texture2D(uTexSampler, vTexSamplingCoord + vec2(uTexelSize.x, 0.0)).rgb;
+                vec3 sharpened = center.rgb * (1.0 + 4.0 * uSharpness) - (north + south + west + east) * uSharpness;
+                centerColor = applyColorFilters(clamp(sharpened, 0.0, 1.0));
               }
 
               gl_FragColor = vec4(centerColor, center.a);
