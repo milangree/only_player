@@ -700,6 +700,69 @@ internal fun MediaPlayerScreen(
                                             isSleepTimerDialogShown = true
                                         }
                                     },
+                                    onLockControlsClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.LOCK)
+                                        } else {
+                                            controlsVisibilityState.showControls()
+                                            controlsVisibilityState.lockControls()
+                                        }
+                                    },
+                                    onVideoContentScaleClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.SCALE)
+                                        } else {
+                                            controlsVisibilityState.showControls()
+                                            videoZoomAndContentScaleState.switchToNextVideoContentScale()
+                                        }
+                                    },
+                                    onVideoContentScaleLongClick = {
+                                        if (!isCustomizingControls) {
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.VIDEO_CONTENT_SCALE
+                                        }
+                                    },
+                                    onVideoFiltersClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.VIDEO_FILTERS)
+                                        } else {
+                                            controlsVisibilityState.hideControls()
+                                            showVideoFilters()
+                                        }
+                                    },
+                                    onPictureInPictureClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.PIP)
+                                        } else if (!pictureInPictureState.hasPipPermission) {
+                                            Toast.makeText(context, coreUiR.string.enable_pip_from_settings, Toast.LENGTH_SHORT).show()
+                                            pictureInPictureState.openPictureInPictureSettings()
+                                        } else {
+                                            pictureInPictureState.enterPictureInPictureMode()
+                                        }
+                                    },
+                                    onRotateClick = {
+                                        rotationState.rotate()
+                                    },
+                                    onScreenshotClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.SCREENSHOT)
+                                        } else {
+                                            onScreenshotClick()
+                                        }
+                                    },
+                                    onPlayInBackgroundClick = {
+                                        if (isCustomizingControls) {
+                                            toggleControlVisibility(PlayerControl.BACKGROUND_PLAY)
+                                        } else {
+                                            onPlayInBackgroundClick()
+                                        }
+                                    },
+                                    onLoopClick = {
+                                        toggleControlVisibility(PlayerControl.LOOP)
+                                    }.takeIf { isCustomizingControls },
+                                    onShuffleClick = {
+                                        toggleControlVisibility(PlayerControl.SHUFFLE)
+                                    }.takeIf { isCustomizingControls },
                                     sleepTimerState = sleepTimerState,
                                 )
                             }

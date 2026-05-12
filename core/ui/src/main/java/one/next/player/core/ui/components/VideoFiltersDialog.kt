@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,13 +59,33 @@ fun VideoFiltersDialog(
         onConfirmPreferences(draftPreferences)
         onDismissRequest()
     }
+    val resetFilters = {
+        updateDraft {
+            it.copy(
+                videoBrightness = PlayerPreferences.DEFAULT_VIDEO_BRIGHTNESS,
+                videoContrast = PlayerPreferences.DEFAULT_VIDEO_CONTRAST,
+                videoSaturation = PlayerPreferences.DEFAULT_VIDEO_SATURATION,
+                videoHue = PlayerPreferences.DEFAULT_VIDEO_HUE,
+                videoGamma = PlayerPreferences.DEFAULT_VIDEO_GAMMA,
+                videoSharpening = PlayerPreferences.DEFAULT_VIDEO_SHARPENING,
+            )
+        }
+    }
 
     NextDialog(
         modifier = dialogModifier.testTag("dialog_video_filters"),
         onDismissRequest = restoreAndDismiss,
         title = { Text(text = stringResource(R.string.video_filters)) },
         confirmButton = { DoneButton(onClick = confirmAndDismiss) },
-        dismissButton = { CancelButton(onClick = restoreAndDismiss) },
+        dismissButton = {
+            TextButton(
+                modifier = Modifier.testTag("btn_reset_video_filters"),
+                onClick = resetFilters,
+            ) {
+                Text(text = stringResource(R.string.reset))
+            }
+            CancelButton(onClick = restoreAndDismiss)
+        },
         content = {
             if (isLandscape) {
                 LandscapeVideoFiltersContent(

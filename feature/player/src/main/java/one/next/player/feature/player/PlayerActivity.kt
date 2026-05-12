@@ -682,6 +682,7 @@ class PlayerActivity : AppCompatActivity() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             super.onMediaItemTransition(mediaItem, reason)
             intent.data = mediaItem?.localConfiguration?.uri
+            updateKeepScreenOnFlag()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -694,6 +695,7 @@ class PlayerActivity : AppCompatActivity() {
             when (playbackState) {
                 Player.STATE_ENDED -> {
                     isPlaybackFinished = mediaController?.playbackState == Player.STATE_ENDED
+                    updateKeepScreenOnFlag()
                     finishAndStopPlayerSession()
                 }
 
@@ -736,7 +738,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun updateKeepScreenOnFlag() {
-        if (mediaController?.isPlaying == true) {
+        if (mediaController?.currentMediaItem != null && !isPlaybackFinished) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

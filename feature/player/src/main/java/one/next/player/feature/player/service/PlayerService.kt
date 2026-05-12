@@ -195,7 +195,8 @@ class PlayerService : MediaSessionService() {
             "ttml",
             "vtt",
         )
-        private const val GAMMA_LUT_SIZE = 32
+        private const val GAMMA_LUT_SIZE = 16
+        private const val VIDEO_FILTER_PREVIEW_DELAY_MS = 120L
     }
 
     @Inject
@@ -1139,36 +1140,52 @@ class PlayerService : MediaSessionService() {
         preferences: PlayerPreferences,
     ) {
         val videoFilters = preferences.toVideoFilterPreferences()
-        pendingVideoFiltersJob?.cancel()
-        if (currentVideoEffectsState == VideoEffectsState(videoFilters, activeDecoderPriority)) return
-
-        pendingVideoFiltersJob = serviceScope.launch {
-            val effects = withContext(Dispatchers.Default) {
-                videoFilters.toVideoEffects(activeDecoderPriority)
-            }
-            if (preferencesRepository.playerPreferences.value.toVideoFilterPreferences() != videoFilters) return@launch
-
-            applyVideoEffects(player, videoFilters, activeDecoderPriority, effects)
-            Logger.debug(TAG, "Apply video filters: $videoFilters effects=${effects.size}")
-        }.also { job ->
-            job.invokeOnCompletion {
-                if (pendingVideoFiltersJob == job) pendingVideoFiltersJob = null
-            }
-        }
+        scheduleVideoFilters(
+            player = player,
+            videoFilters = videoFilters,
+            delayMs = 0L,
+            shouldSkipStalePreferences = true,
+            logPrefix = "Apply",
+        )
     }
 
     private fun previewVideoFilters(preferences: PlayerPreferences) {
         val player = mediaSession?.player as? ExoPlayer ?: return
         val videoFilters = preferences.toVideoFilterPreferences()
+        scheduleVideoFilters(
+            player = player,
+            videoFilters = videoFilters,
+            delayMs = VIDEO_FILTER_PREVIEW_DELAY_MS,
+            shouldSkipStalePreferences = false,
+            logPrefix = "Preview",
+        )
+    }
+
+    private fun scheduleVideoFilters(
+        player: ExoPlayer,
+        videoFilters: VideoFilterPreferences,
+        delayMs: Long,
+        shouldSkipStalePreferences: Boolean,
+        logPrefix: String,
+    ) {
         pendingVideoFiltersJob?.cancel()
-        if (currentVideoEffectsState == VideoEffectsState(videoFilters, activeDecoderPriority)) return
+        if (currentVideoEffectsState == VideoEffectsState(videoFilters, activeDecoderPriority, isPipelineInitialized = true)) return
 
         pendingVideoFiltersJob = serviceScope.launch {
+            fun hasStalePreferences() = shouldSkipStalePreferences &&
+                preferencesRepository.playerPreferences.value.toVideoFilterPreferences() != videoFilters
+
+            if (delayMs > 0L) delay(delayMs)
+            if (hasStalePreferences()) return@launch
+
+            val decoderPriority = activeDecoderPriority
             val effects = withContext(Dispatchers.Default) {
-                videoFilters.toVideoEffects(activeDecoderPriority)
+                videoFilters.toVideoEffects(decoderPriority)
             }
-            applyVideoEffects(player, videoFilters, activeDecoderPriority, effects)
-            Logger.debug(TAG, "Preview video filters: $videoFilters effects=${effects.size}")
+            if (hasStalePreferences()) return@launch
+
+            applyVideoEffects(player, videoFilters, decoderPriority, effects)
+            Logger.debug(TAG, "$logPrefix video filters: $videoFilters effects=${effects.size}")
         }.also { job ->
             job.invokeOnCompletion {
                 if (pendingVideoFiltersJob == job) pendingVideoFiltersJob = null
@@ -1182,7 +1199,11 @@ class PlayerService : MediaSessionService() {
         decoderPriority: DecoderPriority,
         effects: List<Effect>,
     ) {
-        currentVideoEffectsState = VideoEffectsState(videoFilters, decoderPriority)
+        currentVideoEffectsState = VideoEffectsState(
+            filters = videoFilters,
+            decoderPriority = decoderPriority,
+            isPipelineInitialized = true,
+        )
         player.setVideoEffects(effects)
         updateCurrentVideoEffectsAvailability(player)
     }
@@ -1219,7 +1240,7 @@ class PlayerService : MediaSessionService() {
 
     private suspend fun VideoFilterPreferences.toVideoEffects(decoderPriority: DecoderPriority): List<Effect> = buildList {
         if (!shouldApplyVideoEffects(decoderPriority)) return@buildList
-        if (brightness != PlayerPreferences.DEFAULT_VIDEO_BRIGHTNESS) add(Brightness(brightness))
+        add(Brightness(brightness))
         if (contrast != PlayerPreferences.DEFAULT_VIDEO_CONTRAST) add(Contrast(contrast))
         if (saturation != PlayerPreferences.DEFAULT_VIDEO_SATURATION || hue != PlayerPreferences.DEFAULT_VIDEO_HUE) {
             add(
