@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import kotlin.math.roundToInt
 import one.next.player.core.model.PlayerPreferences
 import one.next.player.core.model.SubtitleColor
 import one.next.player.core.model.SubtitleEdgeStyle
@@ -57,6 +58,33 @@ fun SubtitleStylePanel(
                     Icon(
                         imageVector = NextIcons.History,
                         contentDescription = stringResource(id = R.string.reset_subtitle_text_size),
+                    )
+                }
+            },
+        )
+        PreferenceSlider(
+            modifier = Modifier.testTag("slider_subtitle_position"),
+            title = stringResource(id = R.string.subtitle_position),
+            description = "${(preferences.subtitleBottomPaddingFraction * 100).roundToInt()}%",
+            icon = NextIcons.Length,
+            isEnabled = isEnabled,
+            value = preferences.subtitleBottomPaddingFraction,
+            valueRange = SUBTITLE_POSITION_RANGE,
+            onValueChange = { onPreferencesChange(preferences.copy(subtitleBottomPaddingFraction = it)) },
+            trailingContent = {
+                FilledIconButton(
+                    enabled = isEnabled,
+                    onClick = {
+                        onPreferencesChange(
+                            preferences.copy(
+                                subtitleBottomPaddingFraction = PlayerPreferences.DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION,
+                            ),
+                        )
+                    },
+                ) {
+                    Icon(
+                        imageVector = NextIcons.History,
+                        contentDescription = stringResource(id = R.string.reset_subtitle_position),
                     )
                 }
             },
@@ -119,3 +147,4 @@ private fun SubtitleEdgeStyle.next(): SubtitleEdgeStyle = when (this) {
 }
 
 private val SUBTITLE_TEXT_SIZE_RANGE = 10f..60f
+private val SUBTITLE_POSITION_RANGE = PlayerPreferences.MIN_SUBTITLE_BOTTOM_PADDING_FRACTION..PlayerPreferences.MAX_SUBTITLE_BOTTOM_PADDING_FRACTION

@@ -67,6 +67,10 @@ fun SubtitleView(
                     subtitleFontPolicy = subtitleFontPolicy,
                 )
                 setApplyEmbeddedStyles(configuration.shouldApplyEmbeddedStyles)
+                applySubtitlePosition(
+                    configuration = configuration,
+                    subtitleFontPolicy = subtitleFontPolicy,
+                )
             }
         },
         update = { subtitleView ->
@@ -84,6 +88,10 @@ fun SubtitleView(
                 subtitleFontPolicy = subtitleFontPolicy,
             )
             subtitleView.setApplyEmbeddedStyles(configuration.shouldApplyEmbeddedStyles)
+            subtitleView.applySubtitlePosition(
+                configuration = configuration,
+                subtitleFontPolicy = subtitleFontPolicy,
+            )
 
             if (isInPictureInPictureMode) {
                 subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION)
@@ -103,6 +111,7 @@ data class SubtitleConfiguration(
     val shouldUseBoldText: Boolean,
     val color: SubtitleColor,
     val edgeStyle: SubtitleEdgeStyle,
+    val bottomPaddingFraction: Float,
     val shouldApplyEmbeddedStyles: Boolean,
     val externalSubtitleFontSource: ExternalSubtitleFontSource?,
 )
@@ -157,6 +166,20 @@ private fun SubtitleView.applySubtitleStyle(
             setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, configuration.textSize.toFloat())
         }
     }
+}
+
+@OptIn(UnstableApi::class)
+private fun SubtitleView.applySubtitlePosition(
+    configuration: SubtitleConfiguration,
+    subtitleFontPolicy: SubtitleFontPolicy,
+) {
+    val bottomPaddingFraction = when (subtitleFontPolicy) {
+        SubtitleFontPolicy.ExternalOrFallback -> configuration.bottomPaddingFraction
+        SubtitleFontPolicy.Ass,
+        SubtitleFontPolicy.SystemCaptionStyle,
+        -> SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION
+    }
+    setBottomPaddingFraction(bottomPaddingFraction)
 }
 
 private fun SubtitleColor.toArgb(): Int = when (this) {

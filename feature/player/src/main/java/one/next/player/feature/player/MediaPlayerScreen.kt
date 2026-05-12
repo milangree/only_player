@@ -589,6 +589,7 @@ internal fun MediaPlayerScreen(
                         shouldUseBoldText = playerPreferences.shouldUseBoldSubtitleText,
                         color = playerPreferences.subtitleColor,
                         edgeStyle = playerPreferences.subtitleEdgeStyle,
+                        bottomPaddingFraction = playerPreferences.subtitleBottomPaddingFraction,
                         shouldApplyEmbeddedStyles = playerPreferences.shouldApplyEmbeddedStyles,
                         externalSubtitleFontSource = externalSubtitleFontSource,
                     ),

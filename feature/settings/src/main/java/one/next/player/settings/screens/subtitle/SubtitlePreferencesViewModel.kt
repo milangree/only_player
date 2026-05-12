@@ -131,6 +131,7 @@ class SubtitlePreferencesViewModel @Inject constructor(
                     shouldShowSubtitleBackground = preferences.shouldShowSubtitleBackground,
                     subtitleColor = preferences.subtitleColor,
                     subtitleEdgeStyle = preferences.subtitleEdgeStyle,
+                    subtitleBottomPaddingFraction = preferences.subtitleBottomPaddingFraction,
                 )
             }
         }

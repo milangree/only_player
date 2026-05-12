@@ -71,6 +71,7 @@ data class PlayerPreferences(
     val shouldUseBoldSubtitleText: Boolean = true,
     val subtitleColor: SubtitleColor = SubtitleColor.WHITE,
     val subtitleEdgeStyle: SubtitleEdgeStyle = SubtitleEdgeStyle.DROP_SHADOW,
+    val subtitleBottomPaddingFraction: Float = DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION,
     val shouldApplyEmbeddedStyles: Boolean = true,
 
     // 解码偏好
@@ -103,6 +104,9 @@ data class PlayerPreferences(
         const val MIN_LONG_PRESS_CONTROLS_SPEED = 0.2f
         const val MAX_LONG_PRESS_CONTROLS_SPEED = 4.0f
         const val DEFAULT_SUBTITLE_TEXT_SIZE = 20
+        const val DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION = 0.08f
+        const val MIN_SUBTITLE_BOTTOM_PADDING_FRACTION = 0f
+        const val MAX_SUBTITLE_BOTTOM_PADDING_FRACTION = 0.4f
         const val DEFAULT_CONTROLLER_AUTO_HIDE_TIMEOUT = 4
         const val DEFAULT_PLAYER_VOLUME_PERCENTAGE = 100
         const val MAX_PLAYER_VOLUME_PERCENTAGE = 200

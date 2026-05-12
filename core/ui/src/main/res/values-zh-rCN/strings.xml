@@ -127,6 +127,8 @@
     <string name="serif">衬线字体</string>
     <string name="subtitle_text_size">字幕文本大小</string>
     <string name="reset_subtitle_text_size">重置字幕文本大小</string>
+    <string name="subtitle_position">字幕位置</string>
+    <string name="reset_subtitle_position">重置字幕位置</string>
     <string name="subtitle_text_bold_desc">字幕使用粗体文本</string>
     <string name="subtitle_background">字幕背景</string>
     <string name="subtitle_background_desc">启用字幕文本背景</string>
