@@ -1,12 +1,14 @@
-- 将视频滤镜面板改为播放器内覆盖层，调整时仍可看到画面变化
-- 为视频滤镜加入平滑过渡，减少亮度、对比度、饱和度、色相、Gamma 和锐化调整时的突兀跳变
-- 为视频滤镜面板新增一键重置
+- 支持将播放器外侧控制按钮在左右两侧之间切换
+- 将视频滤镜设置归入画面处理页面，和解码器优先级集中管理
+- 让设置列表首尾项目圆角跟随设备屏幕圆角
+- 更新 Media3 到 1.10.1
 
 <details>
 <summary>English Version</summary>
 
-- Show the video filters panel as an in-player overlay so the picture remains visible while adjusting filters
-- Add smooth transitions for video filters to reduce abrupt changes when adjusting brightness, contrast, saturation, hue, gamma, and sharpening
-- Add a reset button to the video filters panel
+- Support switching the outer player control buttons between the left and right sides
+- Move video filter settings into the video processing page alongside decoder priority
+- Match the first and last setting list item corners to the device screen corners
+- Update Media3 to 1.10.1
 
 </details>
