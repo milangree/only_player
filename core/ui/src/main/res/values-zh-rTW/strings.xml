@@ -191,6 +191,16 @@
     <string name="serif">襯線字型</string>
     <string name="fast_seek_description">挑轉至最接近的關鍵影格而不是準確的影格。</string>
     <string name="subtitle_text_bold">粗體字幕文字</string>
+    <string name="reset_subtitle_text_size">重設字幕文字大小</string>
+    <string name="subtitle_text_color">字幕文字顏色</string>
+    <string name="subtitle_color_white">白色</string>
+    <string name="subtitle_color_yellow">黃色</string>
+    <string name="subtitle_color_cyan">青色</string>
+    <string name="subtitle_color_green">綠色</string>
+    <string name="subtitle_edge_style">字幕邊緣樣式</string>
+    <string name="subtitle_edge_none">無</string>
+    <string name="subtitle_edge_outline">描邊</string>
+    <string name="subtitle_edge_shadow">陰影</string>
     <string name="player_controls_next">播放下一個</string>
     <string name="stretch">延伸</string>
     <string name="ff_rewind">快進/快退</string>

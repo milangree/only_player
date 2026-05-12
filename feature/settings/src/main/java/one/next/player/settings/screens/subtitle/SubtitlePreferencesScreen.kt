@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
@@ -37,15 +36,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.nio.charset.Charset
 import one.next.player.core.model.Font
-import one.next.player.core.model.PlayerPreferences
 import one.next.player.core.ui.R
 import one.next.player.core.ui.components.ClickablePreferenceItem
 import one.next.player.core.ui.components.ListSectionTitle
 import one.next.player.core.ui.components.NextTopAppBar
-import one.next.player.core.ui.components.PreferenceSlider
 import one.next.player.core.ui.components.PreferenceSwitch
 import one.next.player.core.ui.components.PreferenceSwitchWithDivider
 import one.next.player.core.ui.components.RadioTextButton
+import one.next.player.core.ui.components.SubtitleStylePanel
 import one.next.player.core.ui.designsystem.NextIcons
 import one.next.player.core.ui.extensions.withBottomFallback
 import one.next.player.core.ui.theme.OnePlayerTheme
@@ -229,50 +227,10 @@ private fun SubtitlePreferencesContent(
             }
 
             ListSectionTitle(text = stringResource(id = R.string.subtitle_appearance))
-            Column(
-                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-            ) {
-                PreferenceSwitch(
-                    title = stringResource(id = R.string.subtitle_text_bold),
-                    description = stringResource(id = R.string.subtitle_text_bold_desc),
-                    icon = NextIcons.Bold,
-                    isEnabled = uiState.preferences.shouldUseSystemCaptionStyle.not(),
-                    isChecked = uiState.preferences.shouldUseBoldSubtitleText,
-                    onClick = { onEvent(SubtitlePreferencesUiEvent.ToggleSubtitleTextBold) },
-                    isFirstItem = true,
-                )
-                PreferenceSlider(
-                    title = stringResource(id = R.string.subtitle_text_size),
-                    description = uiState.preferences.subtitleTextSize.toString(),
-                    icon = NextIcons.FontSize,
-                    isEnabled = uiState.preferences.shouldUseSystemCaptionStyle.not(),
-                    value = uiState.preferences.subtitleTextSize.toFloat(),
-                    valueRange = 10f..60f,
-                    onValueChange = { onEvent(SubtitlePreferencesUiEvent.UpdateSubtitleFontSize(it.toInt())) },
-                    trailingContent = {
-                        FilledIconButton(
-                            enabled = uiState.preferences.shouldUseSystemCaptionStyle.not(),
-                            onClick = {
-                                onEvent(SubtitlePreferencesUiEvent.UpdateSubtitleFontSize(PlayerPreferences.DEFAULT_SUBTITLE_TEXT_SIZE))
-                            },
-                        ) {
-                            Icon(
-                                imageVector = NextIcons.History,
-                                contentDescription = stringResource(id = R.string.reset_seek_increment),
-                            )
-                        }
-                    },
-                )
-                PreferenceSwitch(
-                    title = stringResource(id = R.string.subtitle_background),
-                    description = stringResource(id = R.string.subtitle_background_desc),
-                    icon = NextIcons.Background,
-                    isEnabled = uiState.preferences.shouldUseSystemCaptionStyle.not(),
-                    isChecked = uiState.preferences.shouldShowSubtitleBackground,
-                    onClick = { onEvent(SubtitlePreferencesUiEvent.ToggleSubtitleBackground) },
-                    isLastItem = true,
-                )
-            }
+            SubtitleStylePanel(
+                preferences = uiState.preferences,
+                onPreferencesChange = { onEvent(SubtitlePreferencesUiEvent.UpdateSubtitleStyle(it)) },
+            )
         }
 
         uiState.showDialog?.let { showDialog ->

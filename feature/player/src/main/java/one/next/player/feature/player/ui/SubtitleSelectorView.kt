@@ -46,7 +46,10 @@ import kotlin.math.roundToLong
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import one.next.player.core.model.PlayerPreferences
 import one.next.player.core.ui.R
+import one.next.player.core.ui.components.ListSectionTitle
+import one.next.player.core.ui.components.SubtitleStylePanel
 import one.next.player.feature.player.extensions.getName
 import one.next.player.feature.player.state.SubtitleOptionsEvent
 import one.next.player.feature.player.state.rememberSubtitleOptionsState
@@ -60,6 +63,8 @@ fun BoxScope.SubtitleSelectorView(
     player: Player,
     onSelectSubtitleClick: () -> Unit,
     onAddOnlineSubtitleClick: (String) -> Unit,
+    preferences: PlayerPreferences,
+    onPreferencesChange: (PlayerPreferences) -> Unit,
     onEvent: (SubtitleOptionsEvent) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
@@ -133,6 +138,12 @@ fun BoxScope.SubtitleSelectorView(
             SpeedInput(
                 value = subtitleOptionsState.speedMultiplier,
                 onValueChange = { subtitleOptionsState.setSpeed(it) },
+            )
+            Spacer(modifier = Modifier.size(16.dp))
+            ListSectionTitle(text = stringResource(id = R.string.subtitle_appearance))
+            SubtitleStylePanel(
+                preferences = preferences,
+                onPreferencesChange = onPreferencesChange,
             )
         }
     }

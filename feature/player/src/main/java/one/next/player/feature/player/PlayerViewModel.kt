@@ -193,6 +193,20 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    fun updateSubtitleStyle(preferences: PlayerPreferences) {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(
+                    shouldUseBoldSubtitleText = preferences.shouldUseBoldSubtitleText,
+                    subtitleTextSize = preferences.subtitleTextSize,
+                    shouldShowSubtitleBackground = preferences.shouldShowSubtitleBackground,
+                    subtitleColor = preferences.subtitleColor,
+                    subtitleEdgeStyle = preferences.subtitleEdgeStyle,
+                )
+            }
+        }
+    }
+
     fun updatePlayerControlsCustomization(
         hiddenControls: Set<PlayerControl>,
         layout: PlayerControlsLayout,

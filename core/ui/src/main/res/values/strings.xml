@@ -154,9 +154,19 @@
     <string name="subtitle_text_bold">Bold subtitle text</string>
     <string name="subtitle_text_bold_desc">Use bold text for subtitle</string>
     <string name="subtitle_text_size">Subtitle text size</string>
+    <string name="reset_subtitle_text_size">Reset subtitle text size</string>
     <string name="subtitle_desc">Subtitle appearance, playback options</string>
     <string name="subtitle_background">Subtitle background</string>
     <string name="subtitle_background_desc">Enable background to subtitle text</string>
+    <string name="subtitle_text_color">Subtitle text color</string>
+    <string name="subtitle_color_white">White</string>
+    <string name="subtitle_color_yellow">Yellow</string>
+    <string name="subtitle_color_cyan">Cyan</string>
+    <string name="subtitle_color_green">Green</string>
+    <string name="subtitle_edge_style">Subtitle edge style</string>
+    <string name="subtitle_edge_none">None</string>
+    <string name="subtitle_edge_outline">Outline</string>
+    <string name="subtitle_edge_shadow">Drop shadow</string>
     <string name="decoder">Decoder</string>
     <string name="decoder_desc">Decoder priority and video filter options</string>    <string name="video_software_decoders">Software video decoders</string>
     <string name="video_software_decoders_desc">Use application software video decoders (experimental)</string>

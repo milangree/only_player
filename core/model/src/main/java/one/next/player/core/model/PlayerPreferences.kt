@@ -69,6 +69,8 @@ data class PlayerPreferences(
     val shouldShowSubtitleBackground: Boolean = false,
     val subtitleFont: Font = Font.DEFAULT,
     val shouldUseBoldSubtitleText: Boolean = true,
+    val subtitleColor: SubtitleColor = SubtitleColor.WHITE,
+    val subtitleEdgeStyle: SubtitleEdgeStyle = SubtitleEdgeStyle.DROP_SHADOW,
     val shouldApplyEmbeddedStyles: Boolean = true,
 
     // 解码偏好

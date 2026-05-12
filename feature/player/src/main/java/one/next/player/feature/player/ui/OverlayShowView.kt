@@ -19,11 +19,12 @@ fun BoxScope.OverlayShowView(
     player: Player,
     overlayView: OverlayView?,
     videoContentScale: VideoContentScale,
-    videoFilterPreferences: PlayerPreferences,
+    playerPreferences: PlayerPreferences,
     onDismiss: () -> Unit = {},
     onSelectSubtitleClick: () -> Unit = {},
     onAddOnlineSubtitleClick: (String) -> Unit = {},
     onSubtitleOptionEvent: (SubtitleOptionsEvent) -> Unit = {},
+    onSubtitleStyleChanged: (PlayerPreferences) -> Unit = {},
     onVideoContentScaleChanged: (VideoContentScale) -> Unit = {},
     onPreviewVideoFilters: (PlayerPreferences) -> Unit = {},
     onConfirmVideoFilters: (PlayerPreferences) -> Unit = {},
@@ -53,6 +54,8 @@ fun BoxScope.OverlayShowView(
         player = player,
         onSelectSubtitleClick = onSelectSubtitleClick,
         onAddOnlineSubtitleClick = onAddOnlineSubtitleClick,
+        preferences = playerPreferences,
+        onPreferencesChange = onSubtitleStyleChanged,
         onEvent = onSubtitleOptionEvent,
         onDismiss = onDismiss,
     )
@@ -72,7 +75,7 @@ fun BoxScope.OverlayShowView(
 
     VideoFilterOverlayView(
         shouldShow = overlayView == OverlayView.VIDEO_FILTERS,
-        preferences = videoFilterPreferences,
+        preferences = playerPreferences,
         onDismissRequest = onCloseVideoFilters,
         onPreviewPreferences = onPreviewVideoFilters,
         onConfirmPreferences = onConfirmVideoFilters,

@@ -56,6 +56,7 @@ class SubtitlePreferencesViewModel @Inject constructor(
             is SubtitlePreferencesUiEvent.UpdateSubtitleFont -> updateSubtitleFont(event.value)
             SubtitlePreferencesUiEvent.ToggleSubtitleTextBold -> toggleSubtitleTextBold()
             is SubtitlePreferencesUiEvent.UpdateSubtitleFontSize -> updateSubtitleFontSize(event.value)
+            is SubtitlePreferencesUiEvent.UpdateSubtitleStyle -> updateSubtitleStyle(event.preferences)
             SubtitlePreferencesUiEvent.ToggleSubtitleBackground -> toggleSubtitleBackground()
             SubtitlePreferencesUiEvent.ToggleApplyEmbeddedStyles -> toggleApplyEmbeddedStyles()
             is SubtitlePreferencesUiEvent.UpdateSubtitleEncoding -> updateSubtitleEncoding(event.value)
@@ -117,6 +118,20 @@ class SubtitlePreferencesViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
                 it.copy(shouldShowSubtitleBackground = !it.shouldShowSubtitleBackground)
+            }
+        }
+    }
+
+    private fun updateSubtitleStyle(preferences: PlayerPreferences) {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(
+                    shouldUseBoldSubtitleText = preferences.shouldUseBoldSubtitleText,
+                    subtitleTextSize = preferences.subtitleTextSize,
+                    shouldShowSubtitleBackground = preferences.shouldShowSubtitleBackground,
+                    subtitleColor = preferences.subtitleColor,
+                    subtitleEdgeStyle = preferences.subtitleEdgeStyle,
+                )
             }
         }
     }
@@ -207,6 +222,7 @@ sealed interface SubtitlePreferencesUiEvent {
     data class UpdateSubtitleFont(val value: Font) : SubtitlePreferencesUiEvent
     data object ToggleSubtitleTextBold : SubtitlePreferencesUiEvent
     data class UpdateSubtitleFontSize(val value: Int) : SubtitlePreferencesUiEvent
+    data class UpdateSubtitleStyle(val preferences: PlayerPreferences) : SubtitlePreferencesUiEvent
     data object ToggleSubtitleBackground : SubtitlePreferencesUiEvent
     data object ToggleApplyEmbeddedStyles : SubtitlePreferencesUiEvent
     data class UpdateSubtitleEncoding(val value: String) : SubtitlePreferencesUiEvent

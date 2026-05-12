@@ -587,6 +587,8 @@ internal fun MediaPlayerScreen(
                         font = playerPreferences.subtitleFont,
                         textSize = playerPreferences.subtitleTextSize,
                         shouldUseBoldText = playerPreferences.shouldUseBoldSubtitleText,
+                        color = playerPreferences.subtitleColor,
+                        edgeStyle = playerPreferences.subtitleEdgeStyle,
                         shouldApplyEmbeddedStyles = playerPreferences.shouldApplyEmbeddedStyles,
                         externalSubtitleFontSource = externalSubtitleFontSource,
                     ),
@@ -1026,11 +1028,12 @@ internal fun MediaPlayerScreen(
                 player = player,
                 overlayView = overlayView,
                 videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                videoFilterPreferences = playerPreferences,
+                playerPreferences = playerPreferences,
                 onDismiss = ::dismissOverlay,
                 onSelectSubtitleClick = onSelectSubtitleClick,
                 onAddOnlineSubtitleClick = onAddOnlineSubtitleClick,
                 onSubtitleOptionEvent = viewModel::onSubtitleOptionEvent,
+                onSubtitleStyleChanged = viewModel::updateSubtitleStyle,
                 onVideoContentScaleChanged = { videoZoomAndContentScaleState.onVideoContentScaleChanged(it) },
                 onPreviewVideoFilters = { previewPreferences ->
                     (player as? androidx.media3.session.MediaController)?.previewVideoFilters(previewPreferences)

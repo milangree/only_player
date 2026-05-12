@@ -1,5 +1,6 @@
 package one.next.player.feature.player.ui
 
+import android.graphics.Color
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.accessibility.CaptioningManager
@@ -23,6 +24,8 @@ import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.peerless2012.ass.media.widget.AssSubtitleView as AssMediaSubtitleView
 import one.next.player.core.data.repository.ExternalSubtitleFontSource
 import one.next.player.core.model.Font
+import one.next.player.core.model.SubtitleColor
+import one.next.player.core.model.SubtitleEdgeStyle
 import one.next.player.feature.player.extensions.toTypeface
 import one.next.player.feature.player.state.rememberCuesState
 import one.next.player.feature.player.state.rememberTracksState
@@ -98,6 +101,8 @@ data class SubtitleConfiguration(
     val font: Font,
     val textSize: Int,
     val shouldUseBoldText: Boolean,
+    val color: SubtitleColor,
+    val edgeStyle: SubtitleEdgeStyle,
     val shouldApplyEmbeddedStyles: Boolean,
     val externalSubtitleFontSource: ExternalSubtitleFontSource?,
 )
@@ -138,11 +143,11 @@ private fun SubtitleView.applySubtitleStyle(
                     ?.let(Typeface::createFromFile)
             }.getOrNull() ?: configuration.font.toTypeface()
             val userStyle = CaptionStyleCompat(
-                android.graphics.Color.WHITE,
-                android.graphics.Color.BLACK.takeIf { configuration.shouldShowBackground } ?: android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT,
-                CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                android.graphics.Color.BLACK,
+                configuration.color.toArgb(),
+                Color.BLACK.takeIf { configuration.shouldShowBackground } ?: Color.TRANSPARENT,
+                Color.TRANSPARENT,
+                configuration.edgeStyle.toCaptionEdgeType(),
+                Color.BLACK,
                 Typeface.create(
                     baseTypeface,
                     Typeface.BOLD.takeIf { configuration.shouldUseBoldText } ?: Typeface.NORMAL,
@@ -152,6 +157,19 @@ private fun SubtitleView.applySubtitleStyle(
             setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, configuration.textSize.toFloat())
         }
     }
+}
+
+private fun SubtitleColor.toArgb(): Int = when (this) {
+    SubtitleColor.WHITE -> Color.WHITE
+    SubtitleColor.YELLOW -> Color.YELLOW
+    SubtitleColor.CYAN -> Color.CYAN
+    SubtitleColor.GREEN -> Color.GREEN
+}
+
+private fun SubtitleEdgeStyle.toCaptionEdgeType(): Int = when (this) {
+    SubtitleEdgeStyle.NONE -> CaptionStyleCompat.EDGE_TYPE_NONE
+    SubtitleEdgeStyle.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
+    SubtitleEdgeStyle.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
 }
 
 private fun SubtitleView.findAssSupportView(): AssMediaSubtitleView? = (0 until childCount).firstNotNullOfOrNull { index ->

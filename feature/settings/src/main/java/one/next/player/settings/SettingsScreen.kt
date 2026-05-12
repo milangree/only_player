@@ -333,6 +333,8 @@ internal enum class SettingRow(
             R.string.subtitle_font,
             R.string.subtitle_text_size,
             R.string.subtitle_text_bold,
+            R.string.subtitle_text_color,
+            R.string.subtitle_edge_style,
             R.string.subtitle_text_encoding,
             R.string.subtitle_background,
             R.string.embedded_styles,
