@@ -7,6 +7,24 @@ import android.os.Build
 import android.util.TypedValue
 import android.view.WindowManager
 import androidx.annotation.ColorInt
+import androidx.core.view.WindowCompat
+
+fun Activity.applyNavigationBarStyle(
+    @ColorInt color: Int,
+    shouldUseDarkIcons: Boolean,
+) {
+    if (window.navigationBarColor != color) {
+        window.navigationBarColor = color
+    }
+    if (window.isNavigationBarContrastEnforced) {
+        window.isNavigationBarContrastEnforced = false
+    }
+
+    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+    if (insetsController.isAppearanceLightNavigationBars != shouldUseDarkIcons) {
+        insetsController.isAppearanceLightNavigationBars = shouldUseDarkIcons
+    }
+}
 
 fun Activity.applyPrivacyProtection(
     shouldPreventScreenshots: Boolean,

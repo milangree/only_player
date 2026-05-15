@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -62,6 +63,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import one.next.player.core.common.Logger
+import one.next.player.core.common.extensions.applyNavigationBarStyle
 import one.next.player.core.common.extensions.applyPrivacyProtection
 import one.next.player.core.common.extensions.canonicalPathOrSelf
 import one.next.player.core.common.extensions.getMediaContentUri
@@ -217,6 +219,7 @@ class PlayerActivity : AppCompatActivity() {
             statusBarStyle = SystemBarStyle.dark(systemBarScrim),
             navigationBarStyle = SystemBarStyle.dark(systemBarScrim),
         )
+        applyNavigationBarStyle(color = Color.BLACK, shouldUseDarkIcons = false)
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()

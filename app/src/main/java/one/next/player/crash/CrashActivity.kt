@@ -65,6 +65,7 @@ import one.next.player.core.ui.R
 import one.next.player.core.ui.components.LogsSelectionContainer
 import one.next.player.core.ui.designsystem.NextIcons
 import one.next.player.core.ui.theme.OnePlayerTheme
+import one.next.player.navigation.NavigationBarColorEffect
 import one.next.player.shouldUseDarkTheme
 import one.next.player.shouldUseDynamicTheming
 
@@ -138,6 +139,10 @@ class CrashActivity : AppCompatActivity() {
                 shouldUseDarkTheme = shouldUseDarkTheme,
                 shouldUseDynamicColor = shouldUseDynamicTheming(uiState = uiState),
             ) {
+                NavigationBarColorEffect(
+                    activity = this@CrashActivity,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                )
                 val clipboard = LocalClipboard.current
                 CrashScreen(
                     exceptionString = exceptionString,

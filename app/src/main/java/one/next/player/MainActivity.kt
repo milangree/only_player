@@ -52,6 +52,7 @@ import one.next.player.core.ui.R as UiR
 import one.next.player.core.ui.composables.rememberRuntimePermissionState
 import one.next.player.core.ui.theme.OnePlayerTheme
 import one.next.player.navigation.MediaRootRoute
+import one.next.player.navigation.NavigationBarColorEffect
 import one.next.player.navigation.cloudNavGraph
 import one.next.player.navigation.mediaNavGraph
 import one.next.player.navigation.settingsNavGraph
@@ -176,6 +177,12 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     val mainNavController = rememberNavController()
+                    NavigationBarColorEffect(
+                        activity = this@MainActivity,
+                        navController = mainNavController,
+                        defaultColor = MaterialTheme.colorScheme.background,
+                        settingsColor = MaterialTheme.colorScheme.surface,
+                    )
 
                     Surface(
                         modifier = Modifier
