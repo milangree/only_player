@@ -28,7 +28,6 @@ import one.next.player.core.model.PlayerControlsLayout
 import one.next.player.core.model.PlayerPreferences
 import one.next.player.core.model.Video
 import one.next.player.core.model.VideoContentScale
-import one.next.player.core.model.next
 import one.next.player.core.model.withSubtitleStyleFrom
 import one.next.player.core.model.withVideoFiltersFrom
 import one.next.player.feature.player.extensions.remoteFilePath
@@ -138,14 +137,10 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun switchToNextDecoderPriority() {
-        updateDecoderPriority { it.next() }
-    }
-
-    private fun updateDecoderPriority(transform: (DecoderPriority) -> DecoderPriority) {
+    fun updateDecoderPriority(decoderPriority: DecoderPriority) {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
-                it.copy(decoderPriority = transform(it.decoderPriority))
+                it.copy(decoderPriority = decoderPriority)
             }
         }
     }

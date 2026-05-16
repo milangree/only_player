@@ -179,6 +179,7 @@
     <string name="video_software_decoders">Software video decoders</string>
     <string name="video_software_decoders_desc">Use application software video decoders (experimental)</string>
     <string name="decoder_priority">Decoder</string>
+    <string name="at_decoder">AT</string>
     <string name="hw_decoder">HW</string>
     <string name="hw_plus_decoder">HW+</string>
     <string name="sw_decoder">SW</string>

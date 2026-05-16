@@ -84,7 +84,7 @@ data class PlayerPreferences(
     val shouldApplyEmbeddedStyles: Boolean = true,
 
     // 解码偏好
-    val decoderPriority: DecoderPriority = DecoderPriority.PREFER_DEVICE,
+    val decoderPriority: DecoderPriority = DecoderPriority.AUTOMATIC,
 ) {
 
     companion object {

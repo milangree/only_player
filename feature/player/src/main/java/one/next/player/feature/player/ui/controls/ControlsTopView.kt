@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import one.next.player.core.model.ControlButtonsPosition
-import one.next.player.core.model.DecoderPriority
 import one.next.player.core.model.PlayerControl
 import one.next.player.core.model.PlayerControlZone
 import one.next.player.core.model.VideoContentScale
@@ -54,7 +53,6 @@ fun ControlsTopView(
     controlButtonsPosition: ControlButtonsPosition,
     visiblePlayerControls: Set<PlayerControl>,
     videoContentScale: VideoContentScale,
-    decoderPriority: DecoderPriority,
     isPipSupported: Boolean,
     isTakingScreenshot: Boolean,
     itemBounds: MutableMap<PlayerControl, Rect>,
@@ -167,7 +165,6 @@ fun ControlsTopView(
                             isBeingDragged = draggingControl == control,
                             player = player,
                             videoContentScale = videoContentScale,
-                            decoderPriority = decoderPriority,
                             isPipSupported = isPipSupported,
                             isCustomizingControls = isCustomizingControls,
                             visiblePlayerControls = visiblePlayerControls,

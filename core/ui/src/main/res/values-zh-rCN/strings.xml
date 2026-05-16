@@ -166,6 +166,7 @@
     <string name="play_url">输入要播放的视频网址</string>
     <string name="video_software_decoders">软件视频解码器</string>
     <string name="decoder_priority">解码器</string>
+    <string name="at_decoder">AT</string>
     <string name="hw_decoder">HW</string>
     <string name="hw_plus_decoder">HW+</string>
     <string name="sw_decoder">SW</string>

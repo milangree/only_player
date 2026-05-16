@@ -66,6 +66,7 @@
     <string name="off">關閉</string>
     <string name="pause_on_headset_disconnect">卸除時暫停</string>
     <string name="prefer_app_decoders">優先選擇應用解碼器</string>
+    <string name="at_decoder">AT</string>
     <string name="hw_decoder">HW</string>
     <string name="hw_plus_decoder">HW+</string>
     <string name="sw_decoder">SW</string>

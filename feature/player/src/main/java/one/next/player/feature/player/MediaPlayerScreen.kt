@@ -79,6 +79,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import one.next.player.core.common.Logger
 import one.next.player.core.data.repository.ExternalSubtitleFontSource
+import one.next.player.core.model.DecoderPriority
 import one.next.player.core.model.PlayerControl
 import one.next.player.core.model.PlayerControlZone
 import one.next.player.core.model.PlayerControlsLayout
@@ -310,6 +311,7 @@ internal fun MediaPlayerScreen(
     }
     var shouldShowOverlay by remember { mutableStateOf(false) }
     var isSleepTimerDialogShown by remember { mutableStateOf(false) }
+    var isDecoderDialogShown by remember { mutableStateOf(false) }
     var videoFiltersInitialPreferences by remember { mutableStateOf<PlayerPreferences?>(null) }
     var isAmbienceModeEnabled by remember { mutableStateOf(false) }
     val videoFiltersUnavailableMessage = stringResource(coreUiR.string.video_filters_unavailable_software_decoder)
@@ -605,6 +607,7 @@ internal fun MediaPlayerScreen(
                         shouldApplyEmbeddedStyles = playerPreferences.shouldApplyEmbeddedStyles,
                         externalSubtitleFontSource = externalSubtitleFontSource,
                     ),
+                    decoderPriority = playerPreferences.decoderPriority,
                 )
 
                 AnimatedVisibility(
@@ -675,7 +678,6 @@ internal fun MediaPlayerScreen(
                                     controlButtonsPosition = playerPreferences.controlButtonsPosition,
                                     visiblePlayerControls = visiblePlayerControls,
                                     videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                                    decoderPriority = playerPreferences.decoderPriority,
                                     isPipSupported = pictureInPictureState.isPipSupported,
                                     isTakingScreenshot = isTakingScreenshot,
                                     itemBounds = playerControlItemBounds,
@@ -761,7 +763,7 @@ internal fun MediaPlayerScreen(
                                             toggleControlVisibility(PlayerControl.DECODER)
                                         } else {
                                             controlsVisibilityState.showControls()
-                                            viewModel.switchToNextDecoderPriority()
+                                            isDecoderDialogShown = true
                                         }
                                     },
                                     onAmbienceModeClick = {
@@ -851,7 +853,6 @@ internal fun MediaPlayerScreen(
                                     bottomLeftControls = bottomLeftControls,
                                     controlButtonsPosition = playerPreferences.controlButtonsPosition,
                                     videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                                    decoderPriority = playerPreferences.decoderPriority,
                                     isPipSupported = pictureInPictureState.isPipSupported,
                                     pendingSeekPosition = seekGestureState.pendingSeekPosition,
                                     itemBounds = playerControlItemBounds,
@@ -964,7 +965,7 @@ internal fun MediaPlayerScreen(
                                             toggleControlVisibility(PlayerControl.DECODER)
                                         } else {
                                             controlsVisibilityState.showControls()
-                                            viewModel.switchToNextDecoderPriority()
+                                            isDecoderDialogShown = true
                                         }
                                     },
                                     onAmbienceModeClick = {
@@ -1014,7 +1015,6 @@ internal fun MediaPlayerScreen(
                                 control = draggingState.control,
                                 player = player,
                                 videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                                decoderPriority = playerPreferences.decoderPriority,
                                 isPipSupported = pictureInPictureState.isPipSupported,
                                 isCustomizingControls = true,
                                 visiblePlayerControls = visiblePlayerControls,
@@ -1108,6 +1108,17 @@ internal fun MediaPlayerScreen(
         )
     }
 
+    if (isDecoderDialogShown) {
+        DecoderPriorityDialog(
+            currentDecoderPriority = playerPreferences.decoderPriority,
+            onDecoderPriorityClick = {
+                viewModel.updateDecoderPriority(it)
+                isDecoderDialogShown = false
+            },
+            onDismiss = { isDecoderDialogShown = false },
+        )
+    }
+
     errorState.error?.let { error ->
         AlertDialog(
             onDismissRequest = { },
@@ -1152,6 +1163,54 @@ internal fun MediaPlayerScreen(
             onBackClick()
         }
     }
+}
+
+@Composable
+private fun DecoderPriorityDialog(
+    currentDecoderPriority: DecoderPriority,
+    onDecoderPriorityClick: (DecoderPriority) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        modifier = Modifier.testTag("dialog_decoder_priority"),
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = stringResource(coreUiR.string.decoder_priority))
+        },
+        text = {
+            Column {
+                DecoderPriority.entries.forEach { decoderPriority ->
+                    TextButton(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("btn_decoder_${decoderPriority.logSuffix()}"),
+                        onClick = { onDecoderPriorityClick(decoderPriority) },
+                    ) {
+                        Text(
+                            text = decoderPriority.shortName(),
+                            fontWeight = if (decoderPriority == currentDecoderPriority) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+private fun DecoderPriority.logSuffix(): String = when (this) {
+    DecoderPriority.AUTOMATIC -> "at"
+    DecoderPriority.DEVICE_ONLY -> "hw"
+    DecoderPriority.PREFER_DEVICE -> "hw_plus"
+    DecoderPriority.PREFER_APP -> "sw"
+}
+
+@Composable
+private fun DecoderPriority.shortName(): String = when (this) {
+    DecoderPriority.AUTOMATIC -> stringResource(coreUiR.string.at_decoder)
+    DecoderPriority.DEVICE_ONLY -> stringResource(coreUiR.string.hw_decoder)
+    DecoderPriority.PREFER_DEVICE -> stringResource(coreUiR.string.hw_plus_decoder)
+    DecoderPriority.PREFER_APP -> stringResource(coreUiR.string.sw_decoder)
 }
 
 @Composable

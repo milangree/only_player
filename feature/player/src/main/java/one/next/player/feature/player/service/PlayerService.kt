@@ -263,10 +263,10 @@ class PlayerService : MediaSessionService() {
     private var assHandler: AssHandler? = null
     private var pendingPreciseSeekPromotionJob: Job? = null
     private var pendingStartupPreciseResumeToken: String? = null
-    private var activeDecoderPriority: DecoderPriority = DecoderPriority.PREFER_DEVICE
+    private var activeDecoderPriority: DecoderPriority = DecoderPriority.AUTOMATIC
     private var currentVideoEffectsState = VideoEffectsState(
         filters = VideoFilterPreferences.default(),
-        decoderPriority = DecoderPriority.PREFER_DEVICE,
+        decoderPriority = DecoderPriority.AUTOMATIC,
     )
     private var pendingVideoFiltersJob: Job? = null
     private var videoFilterTransition = VideoFilterTransition.default()
@@ -724,17 +724,7 @@ class PlayerService : MediaSessionService() {
         )
         Logger.debug(TAG, "Retrying playback with software decoder: $mediaId")
 
-        releaseLoudnessEnhancer()
-        failedPlayer.removeListener(playbackStateListener)
-        failedPlayer.removeAnalyticsListener(startupAnalyticsListener)
-        session.player = retryPlayer
-        failedPlayer.clearMediaItems()
-        failedPlayer.stop()
-        failedPlayer.release()
-
         retryPlayer.setMediaItems(mediaItems, currentIndex, playbackPosition)
-        retryPlayer.prepare()
-        retryPlayer.playWhenReady = shouldPlayWhenReady
         retryPlayer.restoreRuntimeState(
             trackSelectionParameters = trackSelectionParameters,
             shuffleModeEnabled = shuffleModeEnabled,
@@ -746,6 +736,16 @@ class PlayerService : MediaSessionService() {
             mediaItemIndex = currentIndex,
             positionMs = playbackPosition,
         )
+        retryPlayer.playWhenReady = shouldPlayWhenReady
+
+        releaseLoudnessEnhancer()
+        failedPlayer.removeListener(playbackStateListener)
+        failedPlayer.removeAnalyticsListener(startupAnalyticsListener)
+        session.player = retryPlayer
+        retryPlayer.prepare()
+        failedPlayer.clearMediaItems()
+        failedPlayer.stop()
+        failedPlayer.release()
         updateCurrentVideoEffectsAvailability(retryPlayer)
         return true
     }
@@ -800,23 +800,17 @@ class PlayerService : MediaSessionService() {
         val isSkipSilenceEnabled = currentPlayer.isSkipSilenceEnabledForPlayer
         val subtitleDelayMilliseconds = currentPlayer.playerSpecificSubtitleDelayMilliseconds
         val subtitleSpeed = currentPlayer.playerSpecificSubtitleSpeed
+        val currentDecoderPriority = activeDecoderPriority
         val nextPlayer = createPlayer(
             decoderPriority = decoderPriority,
             assHandler = assHandler ?: return,
         )
-        Logger.info(TAG, "Switch decoder to ${decoderPriority.logName()} at index=$currentIndex position=$playbackPosition")
-
-        releaseLoudnessEnhancer()
-        currentPlayer.removeListener(playbackStateListener)
-        currentPlayer.removeAnalyticsListener(startupAnalyticsListener)
-        session.player = nextPlayer
-        currentPlayer.clearMediaItems()
-        currentPlayer.stop()
-        currentPlayer.release()
+        Logger.info(
+            TAG,
+            "Switch decoder from ${currentDecoderPriority.logName()} to ${decoderPriority.logName()} at index=$currentIndex position=$playbackPosition",
+        )
 
         nextPlayer.setMediaItems(mediaItems, currentIndex, playbackPosition)
-        nextPlayer.prepare()
-        nextPlayer.playWhenReady = shouldPlayWhenReady
         nextPlayer.restoreRuntimeState(
             trackSelectionParameters = trackSelectionParameters,
             shuffleModeEnabled = shuffleModeEnabled,
@@ -828,6 +822,16 @@ class PlayerService : MediaSessionService() {
             mediaItemIndex = currentIndex,
             positionMs = playbackPosition,
         )
+        nextPlayer.playWhenReady = shouldPlayWhenReady
+
+        releaseLoudnessEnhancer()
+        currentPlayer.removeListener(playbackStateListener)
+        currentPlayer.removeAnalyticsListener(startupAnalyticsListener)
+        session.player = nextPlayer
+        nextPlayer.prepare()
+        currentPlayer.clearMediaItems()
+        currentPlayer.stop()
+        currentPlayer.release()
         updateCurrentVideoEffectsAvailability(nextPlayer)
     }
 
@@ -1596,13 +1600,18 @@ class PlayerService : MediaSessionService() {
     ): ExoPlayer {
         activeDecoderPriority = decoderPriority
         val extensionRendererMode = decoderPriority.extensionRendererMode()
-        Logger.info(TAG, "Create player decoder=${decoderPriority.logName()} policy=$decoderPriority extensionRendererMode=$extensionRendererMode")
+        val shouldEnableDecoderFallback = decoderPriority.shouldEnableDecoderFallback()
+        val shouldUseAudioExtensionFallback = decoderPriority.shouldUseAudioExtensionFallback()
+        Logger.info(
+            TAG,
+            "Create player decoder=${decoderPriority.logName()} policy=$decoderPriority extensionRendererMode=$extensionRendererMode decoderFallback=$shouldEnableDecoderFallback audioExtensionFallback=$shouldUseAudioExtensionFallback",
+        )
         val renderersFactory = NormalizingRenderersFactory(
             context = applicationContext,
             volumeNormalizationAudioProcessor = volumeNormalizationAudioProcessor,
-            shouldUseAudioExtensionFallback = decoderPriority.shouldUseAudioExtensionFallback(),
+            shouldUseAudioExtensionFallback = shouldUseAudioExtensionFallback,
         )
-            .setEnableDecoderFallback(true)
+            .setEnableDecoderFallback(shouldEnableDecoderFallback)
             .setExtensionRendererMode(extensionRendererMode)
 
         val preferences = playerPreferences
