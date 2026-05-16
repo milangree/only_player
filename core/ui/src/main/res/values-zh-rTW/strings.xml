@@ -202,8 +202,8 @@
     <string name="fast_seek_description">挑轉至最接近的關鍵影格而不是準確的影格。</string>
     <string name="subtitle_text_bold">粗體字幕文字</string>
     <string name="reset_subtitle_text_size">重設字幕文字大小</string>
-    <string name="subtitle_position">字幕位置</string>
-    <string name="reset_subtitle_position">重設字幕位置</string>
+    <string name="subtitle_position">字幕垂直位置</string>
+    <string name="reset_subtitle_position">重設字幕垂直位置</string>
     <string name="subtitle_text_color">字幕文字顏色</string>
     <string name="subtitle_color_white">白色</string>
     <string name="subtitle_color_yellow">黃色</string>
