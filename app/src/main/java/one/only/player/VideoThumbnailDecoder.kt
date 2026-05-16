@@ -125,18 +125,6 @@ class VideoThumbnailDecoder(
         }
         logThumbnail { "diskCache miss strategy=${strategy.logName} key=$key" }
 
-        if (strategy is ThumbnailStrategy.FirstFrame) {
-            tryLoadSystemThumbnail()?.let { systemBitmap ->
-                val bitmap = writeToDiskCache(systemBitmap)
-                return DecodeResult(
-                    image = bitmap.toDrawable(options.context.resources).asImage(),
-                    isSampled = true,
-                )
-            }
-        } else {
-            logThumbnail { "systemThumbnail skip strategy=${strategy.logName} key=$key" }
-        }
-
         val mediaInfoStart = System.currentTimeMillis()
         mediaInfoSemaphore.withPermit {
             getThumbnailFromMediaInfo()
