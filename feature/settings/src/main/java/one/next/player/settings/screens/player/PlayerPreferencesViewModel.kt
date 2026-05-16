@@ -120,7 +120,11 @@ class PlayerPreferencesViewModel @Inject constructor(
     private fun toggleRememberPlayerScreenOrientation() {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
-                it.copy(shouldRememberPlayerScreenOrientation = !it.shouldRememberPlayerScreenOrientation)
+                val shouldRememberPlayerScreenOrientation = !it.shouldRememberPlayerScreenOrientation
+                it.copy(
+                    shouldRememberPlayerScreenOrientation = shouldRememberPlayerScreenOrientation,
+                    lastPlayerScreenOrientation = null,
+                )
             }
         }
     }
