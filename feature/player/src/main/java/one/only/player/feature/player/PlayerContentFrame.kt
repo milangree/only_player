@@ -2,6 +2,9 @@ package one.only.player.feature.player
 
 import android.graphics.Rect
 import androidx.annotation.OptIn
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -10,6 +13,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
@@ -20,12 +24,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
-import androidx.media3.ui.compose.modifiers.resizeWithContentScale
 import androidx.media3.ui.compose.state.rememberPresentationState
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.delay
 import one.only.player.core.common.Logger
 import one.only.player.core.model.DecoderPriority
-import one.only.player.feature.player.extensions.toContentScale
+import one.only.player.core.model.VideoContentScale
 import one.only.player.feature.player.state.ControlsVisibilityState
 import one.only.player.feature.player.state.PictureInPictureState
 import one.only.player.feature.player.state.SeekGestureState
@@ -52,7 +57,7 @@ fun PlayerContentFrame(
     decoderPriority: DecoderPriority,
     isGesturesEnabled: Boolean = true,
 ) {
-    // 底层播放器切换后，SurfaceView 需重建以重新绑定视频输出
+    // decoder 切换重建 SurfaceView，重新绑定视频输出
     var surfaceRefreshKey by remember { mutableIntStateOf(0) }
     var previousDecoderPriority by remember { mutableStateOf(decoderPriority) }
     LaunchedEffect(decoderPriority) {
@@ -62,63 +67,73 @@ fun PlayerContentFrame(
         delay(120)
         surfaceRefreshKey++
     }
+
     val presentationState = rememberPresentationState(player)
     val density = LocalDensity.current
     var lastLoggedSurfaceLayout by remember { mutableStateOf("") }
 
-    // presentationState.videoSizeDp 依赖 onVideoSizeChanged，ASS wrapper 不触发该回调
-    // 从 metadata extras 中的视频尺寸作为后备
-    val sourceSizeDp = presentationState.videoSizeDp?.let { size ->
-        size.copy(
-            width = with(density) { size.width.toDp().value },
-            height = with(density) { size.height.toDp().value },
-        )
-    } ?: run {
+    // Media3 1.10.1 的 videoSizeDp 名带 Dp 但实际存视频原始 px；ASS wrapper 不触发 onVideoSizeChanged，回退 metadata
+    val videoSizePx = presentationState.videoSizeDp ?: run {
         val w = videoZoomAndContentScaleState.metadataVideoWidth.toFloat()
         val h = videoZoomAndContentScaleState.metadataVideoHeight.toFloat()
-        val rotation = videoZoomAndContentScaleState.metadataVideoRotation
         if (w <= 0f || h <= 0f) return@run null
-        val (dw, dh) = if (rotation == 90 || rotation == 270) h to w else w to h
-        Size(
-            width = with(density) { dw.toDp().value },
-            height = with(density) { dh.toDp().value },
-        )
+        val rotation = videoZoomAndContentScaleState.metadataVideoRotation
+        if (rotation == 90 || rotation == 270) Size(h, w) else Size(w, h)
     }
 
     key(surfaceRefreshKey) {
-        PlayerSurface(
-            player = player,
-            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
-            modifier = modifier
-                .resizeWithContentScale(
-                    contentScale = videoZoomAndContentScaleState.videoContentScale.toContentScale(),
-                    sourceSizeDp = sourceSizeDp,
-                )
-                .onGloballyPositioned {
-                    val bounds = it.boundsInWindow()
-                    val rect = Rect(
-                        bounds.left.toInt(),
-                        bounds.top.toInt(),
-                        bounds.right.toInt(),
-                        bounds.bottom.toInt(),
-                    )
-                    val surfaceLayoutKey = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${sourceSizeDp?.width}x${sourceSizeDp?.height}:$surfaceRefreshKey"
-                    if (surfaceLayoutKey != lastLoggedSurfaceLayout) {
-                        lastLoggedSurfaceLayout = surfaceLayoutKey
-                        Logger.info(
-                            TAG,
-                            "Player surface layout size=${rect.width()}x${rect.height()} left=${rect.left} top=${rect.top} contentScale=${videoZoomAndContentScaleState.videoContentScale} sourceDp=${sourceSizeDp?.width}x${sourceSizeDp?.height} coverSurface=${presentationState.coverSurface} refresh=$surfaceRefreshKey",
-                        )
+        BoxWithConstraints(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val containerWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+            val containerHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+            val videoWidth = videoSizePx?.width ?: containerWidth
+            val videoHeight = (videoSizePx?.height ?: containerHeight).coerceAtLeast(1f)
+            val fillX = containerWidth / videoWidth
+            val fillY = containerHeight / videoHeight
+
+            // SurfaceView 锁视频原始 px，避开 holder resize 异步竞态；graphicsLayer 缩放使 HUNDRED_PERCENT 1:1 无插值
+            val (baseScaleX, baseScaleY) = when (videoZoomAndContentScaleState.videoContentScale) {
+                VideoContentScale.STRETCH -> fillX to fillY
+                VideoContentScale.BEST_FIT -> min(fillX, fillY).let { it to it }
+                VideoContentScale.CROP -> max(fillX, fillY).let { it to it }
+                VideoContentScale.HUNDRED_PERCENT -> 1f to 1f
+            }
+            val surfaceWidthDp = with(density) { videoWidth.toDp() }
+            val surfaceHeightDp = with(density) { videoHeight.toDp() }
+
+            PlayerSurface(
+                player = player,
+                surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+                modifier = Modifier
+                    .requiredSize(surfaceWidthDp, surfaceHeightDp)
+                    .graphicsLayer {
+                        scaleX = baseScaleX * videoZoomAndContentScaleState.zoom
+                        scaleY = baseScaleY * videoZoomAndContentScaleState.zoom
+                        translationX = videoZoomAndContentScaleState.offset.x
+                        translationY = videoZoomAndContentScaleState.offset.y
                     }
-                    pictureInPictureState.updateVideoViewRect(rect)
-                }
-                .graphicsLayer {
-                    scaleX = videoZoomAndContentScaleState.zoom
-                    scaleY = videoZoomAndContentScaleState.zoom
-                    translationX = videoZoomAndContentScaleState.offset.x
-                    translationY = videoZoomAndContentScaleState.offset.y
-                },
-        )
+                    .onGloballyPositioned {
+                        val bounds = it.boundsInWindow()
+                        val rect = Rect(
+                            bounds.left.toInt(),
+                            bounds.top.toInt(),
+                            bounds.right.toInt(),
+                            bounds.bottom.toInt(),
+                        )
+                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:$surfaceRefreshKey"
+                        if (key != lastLoggedSurfaceLayout) {
+                            lastLoggedSurfaceLayout = key
+                            Logger.info(
+                                TAG,
+                                "Player surface layout size=${rect.width()}x${rect.height()} left=${rect.left} top=${rect.top} contentScale=${videoZoomAndContentScaleState.videoContentScale} videoPx=${videoSizePx?.width}x${videoSizePx?.height} coverSurface=${presentationState.coverSurface} refresh=$surfaceRefreshKey",
+                            )
+                        }
+                        pictureInPictureState.updateVideoViewRect(rect)
+                    },
+            )
+        }
     }
 
     PlayerGestures(
@@ -133,10 +148,7 @@ fun PlayerContentFrame(
 
     if (!presentationState.coverSurface) {
         SubtitleView(
-            modifier = Modifier.resizeWithContentScale(
-                contentScale = videoZoomAndContentScaleState.videoContentScale.toContentScale(),
-                sourceSizeDp = sourceSizeDp,
-            ),
+            modifier = Modifier.fillMaxSize(),
             player = player,
             isInPictureInPictureMode = pictureInPictureState.isInPictureInPictureMode,
             configuration = subtitleConfiguration,
