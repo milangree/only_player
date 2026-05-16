@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -564,6 +565,14 @@ internal fun MediaPlayerScreen(
             hiddenControls = customizingHiddenPlayerControls,
             layout = customizingPlayerControlsLayout,
         )
+    }
+
+    fun cancelControlCustomization() {
+        clearDraggingControl()
+        customizingHiddenPlayerControls = playerPreferences.hiddenPlayerControls - permanentlyVisibleControls
+        customizingPlayerControlsLayout = playerPreferences.playerControlsLayout
+        isCustomizingControls = false
+        controlsVisibilityState.showControls()
     }
 
     fun handleDebugPlayerAction(action: String): Boolean {
@@ -1156,6 +1165,33 @@ internal fun MediaPlayerScreen(
                             icon = painterResource(coreUiR.drawable.ic_brightness),
                         )
                     }
+
+                    AnimatedVisibility(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 132.dp),
+                        visible = isCustomizingControls,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.End,
+                        ) {
+                            FilledTonalButton(
+                                modifier = Modifier.testTag("btn_customize_controls_confirm"),
+                                onClick = ::exitControlCustomization,
+                            ) {
+                                Text(text = stringResource(coreUiR.string.done))
+                            }
+                            TextButton(
+                                modifier = Modifier.testTag("btn_customize_controls_cancel"),
+                                onClick = ::cancelControlCustomization,
+                            ) {
+                                Text(text = stringResource(coreUiR.string.cancel))
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1240,7 +1276,7 @@ internal fun MediaPlayerScreen(
         if (overlayView != null) {
             dismissOverlay()
         } else if (isCustomizingControls) {
-            exitControlCustomization()
+            cancelControlCustomization()
         } else {
             onBackClick()
         }

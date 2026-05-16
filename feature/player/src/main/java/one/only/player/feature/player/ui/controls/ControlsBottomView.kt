@@ -48,7 +48,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
@@ -261,18 +260,20 @@ fun ControlsBottomView(
                     }
                 }
             }
-            PlayerButton(
-                onClick = onCustomizeControlsClick,
-                isSelected = false,
-                label = stringResource(R.string.customize_player_controls).takeIf { isCustomizingControls },
-                shouldShowSelectionBadge = false,
-                shouldDimWhenUnselected = false,
-                shouldShowCustomizeFrame = false,
-            ) {
-                Icon(
-                    imageVector = NextIcons.Edit,
-                    contentDescription = "btn_customize_controls",
-                )
+            if (!isCustomizingControls) {
+                PlayerButton(
+                    onClick = onCustomizeControlsClick,
+                    isSelected = false,
+                    label = null,
+                    shouldShowSelectionBadge = false,
+                    shouldDimWhenUnselected = false,
+                    shouldShowCustomizeFrame = false,
+                ) {
+                    Icon(
+                        imageVector = NextIcons.Edit,
+                        contentDescription = "btn_customize_controls",
+                    )
+                }
             }
         }
     }
