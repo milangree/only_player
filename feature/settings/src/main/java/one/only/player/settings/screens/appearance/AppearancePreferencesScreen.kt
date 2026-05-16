@@ -30,7 +30,6 @@ import one.only.player.core.ui.components.ClickablePreferenceItem
 import one.only.player.core.ui.components.ListSectionTitle
 import one.only.player.core.ui.components.NextTopAppBar
 import one.only.player.core.ui.components.PreferenceSwitch
-import one.only.player.core.ui.components.PreferenceSwitchWithDivider
 import one.only.player.core.ui.components.RadioTextButton
 import one.only.player.core.ui.designsystem.NextIcons
 import one.only.player.core.ui.extensions.withBottomFallback
@@ -98,13 +97,10 @@ private fun AppearancePreferencesContent(
                     onClick = { onEvent(AppearancePreferencesEvent.ShowDialog(AppearancePreferenceDialog.AppLanguage)) },
                     isFirstItem = true,
                 )
-                PreferenceSwitchWithDivider(
+                ClickablePreferenceItem(
                     modifier = Modifier.testTag("item_settings_appearance_theme"),
-                    switchModifier = Modifier.testTag("switch_settings_appearance_theme"),
-                    title = stringResource(id = R.string.dark_theme),
+                    title = stringResource(id = R.string.theme_mode),
                     description = uiState.preferences.themeConfig.name(),
-                    isChecked = uiState.preferences.themeConfig == ThemeConfig.ON,
-                    onChecked = { onEvent(AppearancePreferencesEvent.ToggleDarkTheme) },
                     icon = NextIcons.DarkMode,
                     onClick = { onEvent(AppearancePreferencesEvent.ShowDialog(AppearancePreferenceDialog.Theme)) },
                 )
@@ -134,7 +130,7 @@ private fun AppearancePreferencesContent(
             when (showDialog) {
                 AppearancePreferenceDialog.Theme -> {
                     OptionsDialog(
-                        text = stringResource(id = R.string.dark_theme),
+                        text = stringResource(id = R.string.theme_mode),
                         onDismissClick = { onEvent(AppearancePreferencesEvent.ShowDialog(null)) },
                     ) {
                         items(ThemeConfig.entries.toTypedArray()) {

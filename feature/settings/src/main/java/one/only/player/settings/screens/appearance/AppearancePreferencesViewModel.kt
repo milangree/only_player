@@ -37,7 +37,6 @@ class AppearancePreferencesViewModel @Inject constructor(
     fun onEvent(event: AppearancePreferencesEvent) {
         when (event) {
             is AppearancePreferencesEvent.ShowDialog -> showDialog(event.value)
-            AppearancePreferencesEvent.ToggleDarkTheme -> toggleDarkTheme()
             is AppearancePreferencesEvent.UpdateThemeConfig -> updateThemeConfig(event.themeConfig)
             is AppearancePreferencesEvent.UpdateAppLanguage -> updateAppLanguage(event.languageTag)
             AppearancePreferencesEvent.ToggleUseDynamicColors -> toggleUseDynamicColors()
@@ -48,16 +47,6 @@ class AppearancePreferencesViewModel @Inject constructor(
     private fun showDialog(value: AppearancePreferenceDialog?) {
         uiStateInternal.update {
             it.copy(showDialog = value)
-        }
-    }
-
-    private fun toggleDarkTheme() {
-        viewModelScope.launch {
-            preferencesRepository.updateApplicationPreferences {
-                it.copy(
-                    themeConfig = if (it.themeConfig == ThemeConfig.ON) ThemeConfig.OFF else ThemeConfig.ON,
-                )
-            }
         }
     }
 
@@ -105,7 +94,6 @@ data class AppearancePreferencesUiState(
 
 sealed interface AppearancePreferencesEvent {
     data class ShowDialog(val value: AppearancePreferenceDialog?) : AppearancePreferencesEvent
-    data object ToggleDarkTheme : AppearancePreferencesEvent
     data class UpdateThemeConfig(val themeConfig: ThemeConfig) : AppearancePreferencesEvent
     data class UpdateAppLanguage(val languageTag: String) : AppearancePreferencesEvent
     data object ToggleUseDynamicColors : AppearancePreferencesEvent

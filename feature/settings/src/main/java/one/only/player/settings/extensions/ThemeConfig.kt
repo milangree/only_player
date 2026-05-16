@@ -8,9 +8,9 @@ import one.only.player.core.ui.R
 @Composable
 fun ThemeConfig.name(): String {
     val stringRes = when (this) {
-        ThemeConfig.SYSTEM -> R.string.system_default
-        ThemeConfig.OFF -> R.string.off
-        ThemeConfig.ON -> R.string.on
+        ThemeConfig.SYSTEM -> R.string.follow_system_theme
+        ThemeConfig.OFF -> R.string.light_theme
+        ThemeConfig.ON -> R.string.dark_theme
     }
 
     return stringResource(id = stringRes)

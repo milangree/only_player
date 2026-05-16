@@ -39,7 +39,10 @@
     <string name="title">标题</string>
     <string name="a_z">A-Z</string>
     <string name="z_a">Z-A</string>
-    <string name="dark_theme">深色主题</string>
+    <string name="theme_mode">主题模式</string>
+    <string name="follow_system_theme">跟随系统</string>
+    <string name="light_theme">亮色主题</string>
+    <string name="dark_theme">暗色主题</string>
     <string name="dynamic_theme">动态配色主题</string>
     <string name="sort">排序</string>
     <string name="title_activity_player">Only Player 活动</string>
