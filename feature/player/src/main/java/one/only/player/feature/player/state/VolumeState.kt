@@ -111,9 +111,12 @@ class VolumeState(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == VOLUME_CHANGED_ACTION) {
-                    if (currentVolume <= systemMaxVolume) {
-                        currentVolume = audioManager.currentStreamVolume
-                        volumePercentage = calculateVolumePercentage()
+                    val systemVolume = audioManager.currentStreamVolume
+                    if (currentVolume > systemMaxVolume && systemVolume == systemMaxVolume) return
+                    currentVolume = systemVolume
+                    volumePercentage = calculateVolumePercentage()
+                    if (isVolumeBoostEnabled) {
+                        applyVolumeBoost(0)
                     }
                 }
             }
