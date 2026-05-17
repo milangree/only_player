@@ -192,8 +192,9 @@ class PlayerService : MediaSessionService() {
             "ttml",
             "vtt",
         )
-        private const val VIDEO_FILTER_PREVIEW_DELAY_MS = 120L
+        private const val VIDEO_FILTER_PREVIEW_DELAY_MS = 40L
         private const val VIDEO_FILTER_TRANSITION_DURATION_MS = 160L
+        private const val PAUSED_FRAME_REFRESH_OFFSET_MS = 50L
     }
 
     @Inject
@@ -1278,7 +1279,22 @@ class PlayerService : MediaSessionService() {
             isPipelineInitialized = true,
         )
         player.setVideoEffects(effects)
+        refreshPausedVideoFrame(player)
         updateCurrentVideoEffectsAvailability(player)
+    }
+
+    private fun refreshPausedVideoFrame(player: ExoPlayer) {
+        if (player.playWhenReady) return
+        if (player.playbackState != Player.STATE_READY) return
+        val position = player.currentPosition.takeIf { it != C.TIME_UNSET } ?: return
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
+        val targetPosition = duration
+            ?.let { (position + PAUSED_FRAME_REFRESH_OFFSET_MS).coerceAtMost(it) }
+            ?.takeIf { it != position }
+            ?: (position - PAUSED_FRAME_REFRESH_OFFSET_MS).coerceAtLeast(0L)
+        if (targetPosition == position) return
+        player.seekTo(targetPosition)
+        player.seekTo(position)
     }
 
     private fun updateCurrentVideoEffectsAvailability(player: ExoPlayer) {

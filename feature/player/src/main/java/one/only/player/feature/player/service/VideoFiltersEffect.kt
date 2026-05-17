@@ -101,7 +101,8 @@ internal class VideoFiltersEffect(
             glProgram.setFloatUniform("uSaturation", filters.saturation)
             glProgram.setFloatUniform("uHue", filters.hue)
             glProgram.setFloatUniform("uGamma", filters.gamma)
-            glProgram.setFloatUniform("uSharpness", filters.sharpening * SHARPNESS_SCALE)
+            val sharpness = kotlin.math.sqrt(filters.sharpening.coerceAtLeast(0f)) * SHARPNESS_SCALE
+            glProgram.setFloatUniform("uSharpness", sharpness)
         }
 
         private fun createGlProgram(): GlProgram = try {
@@ -114,7 +115,7 @@ internal class VideoFiltersEffect(
     private companion object {
         private const val POSITION_COMPONENT_COUNT = 4
         private const val VERTEX_COUNT = 4
-        private const val SHARPNESS_SCALE = 0.6f
+        private const val SHARPNESS_SCALE = 1.0f
 
         private const val VERTEX_SHADER = """
             #version 100
@@ -196,7 +197,12 @@ internal class VideoFiltersEffect(
                 vec3 south = texture2D(uTexSampler, vTexSamplingCoord + vec2(0.0, uTexelSize.y)).rgb;
                 vec3 west = texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, 0.0)).rgb;
                 vec3 east = texture2D(uTexSampler, vTexSamplingCoord + vec2(uTexelSize.x, 0.0)).rgb;
-                sourceColor = clamp(center.rgb * (1.0 + 4.0 * uSharpness) - (north + south + west + east) * uSharpness, 0.0, 1.0);
+                vec3 northwest = texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, -uTexelSize.y)).rgb;
+                vec3 northeast = texture2D(uTexSampler, vTexSamplingCoord + vec2(uTexelSize.x, -uTexelSize.y)).rgb;
+                vec3 southwest = texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, uTexelSize.y)).rgb;
+                vec3 southeast = texture2D(uTexSampler, vTexSamplingCoord + vec2(uTexelSize.x, uTexelSize.y)).rgb;
+                vec3 blur = center.rgb * 0.25 + (north + south + west + east) * 0.125 + (northwest + northeast + southwest + southeast) * 0.0625;
+                sourceColor = clamp(center.rgb + (center.rgb - blur) * uSharpness, 0.0, 1.0);
               }
 
               gl_FragColor = vec4(applyColorFilters(sourceColor), center.a);
