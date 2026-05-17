@@ -168,7 +168,17 @@ class PlayerActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "PlayerActivity"
 
-        private val SUBTITLE_DOCUMENT_MIME_TYPES = arrayOf("*/*")
+        private val SUBTITLE_DOCUMENT_MIME_TYPES = arrayOf(
+            "application/ttml+xml",
+            "application/x-ass",
+            "application/x-subrip",
+            "application/x-ssa",
+            "text/plain",
+            "text/srt",
+            "text/vtt",
+            "text/x-ass",
+            "text/x-ssa",
+        )
     }
 
     @Inject
