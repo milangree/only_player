@@ -412,6 +412,11 @@
     <string name="player_icon_style_tonal">質感</string>
     <string name="player_icon_style_classic">經典</string>
     <string name="player_icon_style_translucent">半透</string>
+    <string name="player_icon_style_legacy_only">僅舊版控制項佈局有效</string>
+    <string name="player_controls_style">控制項佈局</string>
+    <string name="player_controls_style_description">在舊版控制項與現代選單佈局之間切換</string>
+    <string name="player_controls_style_legacy">舊版</string>
+    <string name="player_controls_style_modern">現代</string>
     <string name="volume_gesture_sensitivity">音量手勢靈敏度</string>
     <string name="reset_volume_gesture_sensitivity">重設音量手勢靈敏度</string>
     <string name="brightness_gesture_sensitivity">亮度手勢靈敏度</string>

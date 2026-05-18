@@ -27,24 +27,37 @@ fun BoxScope.DecoderPrioritySelectorView(
         title = stringResource(R.string.decoder_priority),
         testTag = "panel_decoder_priority",
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-                .padding(horizontal = 24.dp)
-                .selectableGroup(),
-        ) {
-            DecoderPriority.entries.forEach { decoderPriority ->
-                RadioButtonRow(
-                    isSelected = decoderPriority == currentDecoderPriority,
-                    text = decoderPriority.shortName(),
-                    testTag = "btn_decoder_${decoderPriority.logSuffix()}",
-                    onClick = {
-                        onDecoderPriorityClick(decoderPriority)
-                        onDismiss()
-                    },
-                )
-            }
+        DecoderPrioritySelectorContent(
+            currentDecoderPriority = currentDecoderPriority,
+            onDecoderPriorityClick = onDecoderPriorityClick,
+            onDismiss = onDismiss,
+        )
+    }
+}
+
+@Composable
+fun DecoderPrioritySelectorContent(
+    currentDecoderPriority: DecoderPriority,
+    onDecoderPriorityClick: (DecoderPriority) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+            .padding(horizontal = 24.dp)
+            .selectableGroup(),
+    ) {
+        DecoderPriority.entries.forEach { decoderPriority ->
+            RadioButtonRow(
+                isSelected = decoderPriority == currentDecoderPriority,
+                text = decoderPriority.shortName(),
+                testTag = "btn_decoder_${decoderPriority.logSuffix()}",
+                onClick = {
+                    onDecoderPriorityClick(decoderPriority)
+                    onDismiss()
+                },
+            )
         }
     }
 }

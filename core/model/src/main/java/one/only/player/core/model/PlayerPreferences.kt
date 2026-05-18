@@ -52,6 +52,7 @@ data class PlayerPreferences(
 
     // 播放器界面
     val controllerAutoHideTimeout: Int = DEFAULT_CONTROLLER_AUTO_HIDE_TIMEOUT,
+    val controlsStyle: PlayerControlsStyle = PlayerControlsStyle.MODERN,
     val controlButtonsPosition: ControlButtonsPosition = ControlButtonsPosition.LEFT,
     val playerControlsLayout: PlayerControlsLayout = PlayerControlsLayout(),
     val hiddenPlayerControls: Set<PlayerControl> = emptySet(),

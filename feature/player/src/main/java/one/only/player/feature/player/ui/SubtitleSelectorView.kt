@@ -68,84 +68,106 @@ fun BoxScope.SubtitleSelectorView(
     onEvent: (SubtitleOptionsEvent) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
-    val subtitleTracksState = rememberTracksState(player, C.TRACK_TYPE_TEXT)
-    val subtitleOptionsState = rememberSubtitleOptionsState(player, onEvent)
-    var isOnlineSubtitleDialogVisible by remember { mutableStateOf(false) }
-    var onlineSubtitleUrl by remember { mutableStateOf("") }
-
     OverlayView(
         modifier = modifier,
         shouldShow = shouldShow,
         title = stringResource(R.string.select_subtitle_track),
         testTag = "panel_subtitle_selector",
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-                .padding(horizontal = 24.dp)
-                .selectableGroup(),
-        ) {
-            subtitleTracksState.tracks.forEachIndexed { index, track ->
-                RadioButtonRow(
-                    isSelected = track.isSelected,
-                    text = track.mediaTrackGroup.getName(C.TRACK_TYPE_TEXT, index),
-                    testTag = "item_subtitle_$index",
-                    onClick = {
-                        subtitleTracksState.switchTrack(index)
-                        onDismiss()
-                    },
-                )
-            }
+        SubtitleSelectorContent(
+            player = player,
+            onSelectSubtitleClick = onSelectSubtitleClick,
+            onAddOnlineSubtitleClick = onAddOnlineSubtitleClick,
+            preferences = preferences,
+            onPreferencesChange = onPreferencesChange,
+            onEvent = onEvent,
+            onDismiss = onDismiss,
+        )
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun SubtitleSelectorContent(
+    player: Player,
+    onSelectSubtitleClick: () -> Unit,
+    onAddOnlineSubtitleClick: (String) -> Unit,
+    preferences: PlayerPreferences,
+    onPreferencesChange: (PlayerPreferences) -> Unit,
+    onEvent: (SubtitleOptionsEvent) -> Unit = {},
+    onDismiss: () -> Unit,
+) {
+    val subtitleTracksState = rememberTracksState(player, C.TRACK_TYPE_TEXT)
+    val subtitleOptionsState = rememberSubtitleOptionsState(player, onEvent)
+    var isOnlineSubtitleDialogVisible by remember { mutableStateOf(false) }
+    var onlineSubtitleUrl by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+            .padding(horizontal = 24.dp)
+            .selectableGroup(),
+    ) {
+        subtitleTracksState.tracks.forEachIndexed { index, track ->
             RadioButtonRow(
-                isSelected = subtitleTracksState.tracks.none { it.isSelected },
-                text = stringResource(R.string.disable),
-                testTag = "item_subtitle_disable",
+                isSelected = track.isSelected,
+                text = track.mediaTrackGroup.getName(C.TRACK_TYPE_TEXT, index),
+                testTag = "item_subtitle_$index",
                 onClick = {
-                    subtitleTracksState.switchTrack(-1)
+                    subtitleTracksState.switchTrack(index)
                     onDismiss()
                 },
-            )
-            Spacer(modifier = Modifier.size(16.dp))
-            FilledTonalButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("btn_open_subtitle_picker"),
-                onClick = {
-                    onSelectSubtitleClick()
-                    onDismiss()
-                },
-            ) {
-                Text(text = stringResource(R.string.open_subtitle))
-            }
-            Spacer(modifier = Modifier.size(16.dp))
-            FilledTonalButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("btn_add_online_subtitle"),
-                onClick = {
-                    isOnlineSubtitleDialogVisible = true
-                },
-            ) {
-                Text(text = stringResource(R.string.add_online_subtitle))
-            }
-            Spacer(modifier = Modifier.size(16.dp))
-            DelayInput(
-                value = subtitleOptionsState.delayMilliseconds,
-                onValueChange = { subtitleOptionsState.setDelay(it) },
-            )
-            Spacer(modifier = Modifier.size(16.dp))
-            SpeedInput(
-                value = subtitleOptionsState.speedMultiplier,
-                onValueChange = { subtitleOptionsState.setSpeed(it) },
-            )
-            Spacer(modifier = Modifier.size(16.dp))
-            ListSectionTitle(text = stringResource(id = R.string.subtitle_appearance))
-            SubtitleStylePanel(
-                preferences = preferences,
-                onPreferencesChange = onPreferencesChange,
             )
         }
+        RadioButtonRow(
+            isSelected = subtitleTracksState.tracks.none { it.isSelected },
+            text = stringResource(R.string.disable),
+            testTag = "item_subtitle_disable",
+            onClick = {
+                subtitleTracksState.switchTrack(-1)
+                onDismiss()
+            },
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+        FilledTonalButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("btn_open_subtitle_picker"),
+            onClick = {
+                onSelectSubtitleClick()
+                onDismiss()
+            },
+        ) {
+            Text(text = stringResource(R.string.open_subtitle))
+        }
+        Spacer(modifier = Modifier.size(16.dp))
+        FilledTonalButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("btn_add_online_subtitle"),
+            onClick = {
+                isOnlineSubtitleDialogVisible = true
+            },
+        ) {
+            Text(text = stringResource(R.string.add_online_subtitle))
+        }
+        Spacer(modifier = Modifier.size(16.dp))
+        DelayInput(
+            value = subtitleOptionsState.delayMilliseconds,
+            onValueChange = { subtitleOptionsState.setDelay(it) },
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+        SpeedInput(
+            value = subtitleOptionsState.speedMultiplier,
+            onValueChange = { subtitleOptionsState.setSpeed(it) },
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+        ListSectionTitle(text = stringResource(id = R.string.subtitle_appearance))
+        SubtitleStylePanel(
+            preferences = preferences,
+            onPreferencesChange = onPreferencesChange,
+        )
     }
 
     if (isOnlineSubtitleDialogVisible) {

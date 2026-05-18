@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import one.only.player.core.common.extensions.isPipFeatureSupported
 import one.only.player.core.common.extensions.round
 import one.only.player.core.model.ControlButtonsPosition
+import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.ScreenOrientation
@@ -135,13 +136,23 @@ private fun PlayerPreferencesContent(
                     onClick = { onEvent(PlayerPreferencesUiEvent.ToggleRememberPlayerScreenOrientation) },
                 )
                 ClickablePreferenceItem(
-                    modifier = Modifier.testTag("item_settings_player_icon_style"),
-                    title = stringResource(id = R.string.player_icon_style),
-                    description = uiState.preferences.playerIconStyle.name(),
-                    icon = NextIcons.Style,
-                    onClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.PlayerIconStyleDialog)) },
-                    isLastItem = true,
+                    modifier = Modifier.testTag("item_settings_player_controls_style"),
+                    title = stringResource(id = R.string.player_controls_style),
+                    description = uiState.preferences.controlsStyle.name(),
+                    icon = NextIcons.Player,
+                    onClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.ControlsStyleDialog)) },
+                    isLastItem = uiState.preferences.controlsStyle != PlayerControlsStyle.LEGACY,
                 )
+                if (uiState.preferences.controlsStyle == PlayerControlsStyle.LEGACY) {
+                    ClickablePreferenceItem(
+                        modifier = Modifier.testTag("item_settings_player_icon_style"),
+                        title = stringResource(id = R.string.player_icon_style),
+                        description = uiState.preferences.playerIconStyle.name(),
+                        icon = NextIcons.Style,
+                        onClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.PlayerIconStyleDialog)) },
+                        isLastItem = true,
+                    )
+                }
             }
 
             ListSectionTitle(text = stringResource(id = R.string.playback_behavior))
@@ -299,6 +310,25 @@ private fun PlayerPreferencesContent(
                                 isSelected = it == uiState.preferences.playerIconStyle,
                                 onClick = {
                                     onEvent(PlayerPreferencesUiEvent.UpdatePlayerIconStyle(it))
+                                    onEvent(PlayerPreferencesUiEvent.ShowDialog(null))
+                                },
+                            )
+                        }
+                    }
+                }
+
+                PlayerPreferenceDialog.ControlsStyleDialog -> {
+                    OptionsDialog(
+                        text = stringResource(id = R.string.player_controls_style),
+                        onDismissClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(null)) },
+                    ) {
+                        items(PlayerControlsStyle.entries.toTypedArray()) {
+                            RadioTextButton(
+                                modifier = Modifier.testTag("option_settings_player_controls_style_${it.name.lowercase()}"),
+                                text = it.name(),
+                                isSelected = it == uiState.preferences.controlsStyle,
+                                onClick = {
+                                    onEvent(PlayerPreferencesUiEvent.UpdateControlsStyle(it))
                                     onEvent(PlayerPreferencesUiEvent.ShowDialog(null))
                                 },
                             )

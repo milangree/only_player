@@ -418,6 +418,11 @@
     <string name="player_icon_style_tonal">质感</string>
     <string name="player_icon_style_classic">经典</string>
     <string name="player_icon_style_translucent">半透</string>
+    <string name="player_icon_style_legacy_only">仅旧版控件布局有效</string>
+    <string name="player_controls_style">控件布局</string>
+    <string name="player_controls_style_description">在旧版控件与现代菜单布局间切换</string>
+    <string name="player_controls_style_legacy">旧版</string>
+    <string name="player_controls_style_modern">现代</string>
     <string name="volume_gesture_sensitivity">音量手势灵敏度</string>
     <string name="reset_volume_gesture_sensitivity">重置音量手势灵敏度</string>
     <string name="brightness_gesture_sensitivity">亮度手势灵敏度</string>

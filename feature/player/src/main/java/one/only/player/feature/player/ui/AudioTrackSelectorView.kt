@@ -26,38 +26,49 @@ fun BoxScope.AudioTrackSelectorView(
     player: Player,
     onDismiss: () -> Unit,
 ) {
-    val audioTracksState = rememberTracksState(player, C.TRACK_TYPE_AUDIO)
-
     OverlayView(
         modifier = modifier,
         shouldShow = shouldShow,
         title = stringResource(R.string.select_audio_track),
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-                .padding(horizontal = 24.dp)
-                .selectableGroup(),
-        ) {
-            audioTracksState.tracks.forEachIndexed { index, track ->
-                RadioButtonRow(
-                    isSelected = track.isSelected,
-                    text = track.mediaTrackGroup.getName(C.TRACK_TYPE_AUDIO, index),
-                    onClick = {
-                        audioTracksState.switchTrack(index)
-                        onDismiss()
-                    },
-                )
-            }
+        AudioTrackSelectorContent(
+            player = player,
+            onDismiss = onDismiss,
+        )
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun AudioTrackSelectorContent(
+    player: Player,
+    onDismiss: () -> Unit,
+) {
+    val audioTracksState = rememberTracksState(player, C.TRACK_TYPE_AUDIO)
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+            .padding(horizontal = 24.dp)
+            .selectableGroup(),
+    ) {
+        audioTracksState.tracks.forEachIndexed { index, track ->
             RadioButtonRow(
-                isSelected = audioTracksState.tracks.none { it.isSelected },
-                text = stringResource(R.string.disable),
+                isSelected = track.isSelected,
+                text = track.mediaTrackGroup.getName(C.TRACK_TYPE_AUDIO, index),
                 onClick = {
-                    audioTracksState.switchTrack(-1)
+                    audioTracksState.switchTrack(index)
                     onDismiss()
                 },
             )
         }
+        RadioButtonRow(
+            isSelected = audioTracksState.tracks.none { it.isSelected },
+            text = stringResource(R.string.disable),
+            onClick = {
+                audioTracksState.switchTrack(-1)
+                onDismiss()
+            },
+        )
     }
 }

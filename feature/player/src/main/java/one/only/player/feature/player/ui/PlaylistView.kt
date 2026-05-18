@@ -66,6 +66,24 @@ fun BoxScope.PlaylistView(
     shouldShow: Boolean,
     player: Player,
 ) {
+    OverlayView(
+        modifier = modifier,
+        shouldShow = shouldShow,
+        title = stringResource(R.string.now_playing),
+    ) {
+        PlaylistContent(
+            isVisible = shouldShow,
+            player = player,
+        )
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun PlaylistContent(
+    isVisible: Boolean,
+    player: Player,
+) {
     val hapticFeedback = LocalHapticFeedback.current
     val playlistState = rememberPlaylistState(player)
     val lazyListState = rememberLazyListState()
@@ -74,8 +92,8 @@ fun BoxScope.PlaylistView(
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
-    LaunchedEffect(shouldShow) {
-        if (shouldShow && playlistState.playlist.isNotEmpty()) {
+    LaunchedEffect(isVisible) {
+        if (isVisible && playlistState.playlist.isNotEmpty()) {
             val currentIndex = playlistState.currentMediaItemIndex
             if (currentIndex in playlistState.playlist.indices) {
                 lazyListState.scrollToItem(currentIndex)
@@ -83,39 +101,33 @@ fun BoxScope.PlaylistView(
         }
     }
 
-    OverlayView(
-        modifier = modifier,
-        shouldShow = shouldShow,
-        title = stringResource(R.string.now_playing),
-    ) {
-        if (playlistState.playlist.isEmpty()) {
-            EmptyPlaylistView()
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = lazyListState,
-                contentPadding = PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                itemsIndexed(
-                    items = playlistState.playlist,
-                    key = { _, item -> item.mediaId },
-                ) { index, mediaItem ->
-                    ReorderableItem(
-                        state = reorderableLazyListState,
-                        key = mediaItem.mediaId,
-                    ) {
-                        val isCurrentItem = index == playlistState.currentMediaItemIndex
-                        PlaylistItemView(
-                            mediaItem = mediaItem,
-                            isFirstItem = index == 0,
-                            isLastItem = index == playlistState.playlist.lastIndex,
-                            isCurrentItem = isCurrentItem,
-                            canDelete = playlistState.playlist.size > 1,
-                            onClick = { playlistState.seekToItem(index) },
-                            onDelete = { playlistState.removeItem(index) },
-                        )
-                    }
+    if (playlistState.playlist.isEmpty()) {
+        EmptyPlaylistView()
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = lazyListState,
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            itemsIndexed(
+                items = playlistState.playlist,
+                key = { _, item -> item.mediaId },
+            ) { index, mediaItem ->
+                ReorderableItem(
+                    state = reorderableLazyListState,
+                    key = mediaItem.mediaId,
+                ) {
+                    val isCurrentItem = index == playlistState.currentMediaItemIndex
+                    PlaylistItemView(
+                        mediaItem = mediaItem,
+                        isFirstItem = index == 0,
+                        isLastItem = index == playlistState.playlist.lastIndex,
+                        isCurrentItem = isCurrentItem,
+                        canDelete = playlistState.playlist.size > 1,
+                        onClick = { playlistState.seekToItem(index) },
+                        onDelete = { playlistState.removeItem(index) },
+                    )
                 }
             }
         }

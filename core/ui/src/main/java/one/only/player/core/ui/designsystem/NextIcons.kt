@@ -47,10 +47,14 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LocalMovies
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Loop
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MiscellaneousServices
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PanToolAlt
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Pinch
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -65,6 +69,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SmartButton
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Straighten
@@ -158,4 +163,9 @@ object NextIcons {
     val DeleteSweep = Icons.Rounded.DeleteSweep
     val Image = Icons.Rounded.Image
     val Frame = Icons.Rounded.FilterFrames
+    val Menu = Icons.Rounded.Menu
+    val Lock = Icons.Rounded.Lock
+    val Loop = Icons.Rounded.Loop
+    val Shuffle = Icons.Rounded.Shuffle
+    val Screenshot = Icons.Rounded.PhotoCamera
 }

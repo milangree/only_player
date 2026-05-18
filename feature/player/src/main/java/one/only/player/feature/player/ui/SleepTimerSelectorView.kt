@@ -34,6 +34,24 @@ fun BoxScope.SleepTimerSelectorView(
     sleepTimerState: SleepTimerState,
     onDismiss: () -> Unit,
 ) {
+    OverlayView(
+        modifier = modifier,
+        shouldShow = shouldShow,
+        title = stringResource(R.string.sleep_timer),
+        testTag = "panel_sleep_timer",
+    ) {
+        SleepTimerSelectorContent(
+            sleepTimerState = sleepTimerState,
+            onDismiss = onDismiss,
+        )
+    }
+}
+
+@Composable
+fun SleepTimerSelectorContent(
+    sleepTimerState: SleepTimerState,
+    onDismiss: () -> Unit,
+) {
     val hapticFeedback = LocalHapticFeedback.current
     val initialMinutes = if (sleepTimerState.isActive) {
         (sleepTimerState.remainingMillis / 60_000f).coerceAtLeast(1f)
@@ -45,84 +63,77 @@ fun BoxScope.SleepTimerSelectorView(
     val displayHours = displayMinutes / 60
     val displayRemainderMinutes = displayMinutes % 60
 
-    OverlayView(
-        modifier = modifier,
-        shouldShow = shouldShow,
-        title = stringResource(R.string.sleep_timer),
-        testTag = "panel_sleep_timer",
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+            .padding(horizontal = 24.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-                .padding(horizontal = 24.dp),
-        ) {
-            if (sleepTimerState.isActive) {
-                val remainMin = (sleepTimerState.remainingMillis / 60_000L).toInt()
-                val remainSec = ((sleepTimerState.remainingMillis % 60_000L) / 1000L).toInt()
-                Text(
-                    text = "${stringResource(R.string.sleep_timer_remaining)}: ${String.format("%d:%02d", remainMin, remainSec)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-            }
-
+        if (sleepTimerState.isActive) {
+            val remainMin = (sleepTimerState.remainingMillis / 60_000L).toInt()
+            val remainSec = ((sleepTimerState.remainingMillis % 60_000L) / 1000L).toInt()
             Text(
-                text = when {
-                    displayMinutes == 0 -> stringResource(R.string.sleep_timer_off)
-                    displayHours > 0 -> String.format("%dh %02dmin", displayHours, displayRemainderMinutes)
-                    else -> stringResource(R.string.sleep_timer_minutes, displayMinutes)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 20.dp),
+                text = "${stringResource(R.string.sleep_timer_remaining)}: ${String.format("%d:%02d", remainMin, remainSec)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleMedium,
             )
+        }
 
-            Slider(
-                modifier = Modifier.testTag("slider_sleep_timer"),
-                value = sliderValue,
-                onValueChange = {
-                    sliderValue = it
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                valueRange = 0f..300f,
-            )
+        Text(
+            text = when {
+                displayMinutes == 0 -> stringResource(R.string.sleep_timer_off)
+                displayHours > 0 -> String.format("%dh %02dmin", displayHours, displayRemainderMinutes)
+                else -> stringResource(R.string.sleep_timer_minutes, displayMinutes)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 20.dp),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleMedium,
+        )
 
-            Spacer(modifier = Modifier.size(16.dp))
+        Slider(
+            modifier = Modifier.testTag("slider_sleep_timer"),
+            value = sliderValue,
+            onValueChange = {
+                sliderValue = it
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            },
+            valueRange = 0f..300f,
+        )
 
+        Spacer(modifier = Modifier.size(16.dp))
+
+        FilledTonalButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("btn_sleep_timer_confirm"),
+            onClick = {
+                if (displayMinutes > 0) {
+                    sleepTimerState.start(displayMinutes)
+                } else {
+                    sleepTimerState.cancel()
+                }
+                onDismiss()
+            },
+        ) {
+            Text(text = stringResource(R.string.done))
+        }
+
+        if (sleepTimerState.isActive) {
+            Spacer(modifier = Modifier.size(8.dp))
             FilledTonalButton(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("btn_sleep_timer_confirm"),
+                    .testTag("btn_sleep_timer_off"),
                 onClick = {
-                    if (displayMinutes > 0) {
-                        sleepTimerState.start(displayMinutes)
-                    } else {
-                        sleepTimerState.cancel()
-                    }
+                    sleepTimerState.cancel()
                     onDismiss()
                 },
             ) {
-                Text(text = stringResource(R.string.done))
-            }
-
-            if (sleepTimerState.isActive) {
-                Spacer(modifier = Modifier.size(8.dp))
-                FilledTonalButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("btn_sleep_timer_off"),
-                    onClick = {
-                        sleepTimerState.cancel()
-                        onDismiss()
-                    },
-                ) {
-                    Text(text = stringResource(R.string.sleep_timer_off))
-                }
+                Text(text = stringResource(R.string.sleep_timer_off))
             }
         }
     }

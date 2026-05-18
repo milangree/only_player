@@ -10,6 +10,7 @@ import one.only.player.core.model.ControlButtonsPosition
 import one.only.player.core.model.DecoderPriority
 import one.only.player.core.model.DoubleTapGesture
 import one.only.player.core.model.Font
+import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.Resume
@@ -128,6 +129,10 @@ internal suspend fun DebugCommandEntryPoint.setSetting(
         "player.icon_style" -> {
             val style = enumValue<PlayerIconStyle>(value.requiredString(EXTRA_VALUE))
             preferencesRepository().updatePlayerPreferences { it.copy(playerIconStyle = style) }
+        }
+        "player.controls_style" -> {
+            val style = enumValue<PlayerControlsStyle>(value.requiredString(EXTRA_VALUE))
+            preferencesRepository().updatePlayerPreferences { it.copy(controlsStyle = style) }
         }
         "player.resume" -> {
             val resume = enumValue<Resume>(value.requiredString(EXTRA_VALUE))

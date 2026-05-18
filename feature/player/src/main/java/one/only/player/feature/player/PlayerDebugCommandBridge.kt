@@ -29,6 +29,8 @@ object PlayerDebugCommandBridge {
     const val ACTION_SCREENSHOT = "screenshot"
     const val ACTION_BACKGROUND = "background"
     const val ACTION_SHOW_SLEEP_TIMER = "show_sleep_timer"
+    const val ACTION_SHOW_MENU = "show_menu"
+    const val ACTION_MENU_BACK = "menu_back"
     const val ACTION_TOGGLE_CUSTOMIZE_CONTROLS = "toggle_customize_controls"
     const val ACTION_STRESS_PAN_ZOOM = "stress_pan_zoom"
 

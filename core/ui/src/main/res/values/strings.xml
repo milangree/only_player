@@ -370,6 +370,11 @@
     <string name="player_icon_style_tonal">Tonal</string>
     <string name="player_icon_style_classic">Classic</string>
     <string name="player_icon_style_translucent">Translucent</string>
+    <string name="player_icon_style_legacy_only">Only applies to the legacy controls layout</string>
+    <string name="player_controls_style">Controls layout</string>
+    <string name="player_controls_style_description">Switch between the legacy controls and the modern menu-based layout</string>
+    <string name="player_controls_style_legacy">Legacy</string>
+    <string name="player_controls_style_modern">Modern</string>
     <string name="volume_gesture_sensitivity">Volume gesture sensitivity</string>
     <string name="reset_volume_gesture_sensitivity">Reset volume gesture sensitivity</string>
     <string name="brightness_gesture_sensitivity">Brightness gesture sensitivity</string>

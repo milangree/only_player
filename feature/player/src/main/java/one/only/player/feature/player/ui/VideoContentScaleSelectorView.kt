@@ -34,33 +34,48 @@ fun BoxScope.VideoContentScaleSelectorView(
         shouldShow = shouldShow,
         title = stringResource(R.string.video_zoom),
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-                .padding(horizontal = 24.dp),
-        ) {
-            FilledTonalButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("btn_open_video_filters"),
-                onClick = onShowVideoFilters,
-            ) {
-                Text(text = stringResource(R.string.video_filters))
-            }
-            Spacer(modifier = Modifier.size(16.dp))
+        VideoContentScaleSelectorContent(
+            videoContentScale = videoContentScale,
+            onVideoContentScaleChanged = onVideoContentScaleChanged,
+            onShowVideoFilters = onShowVideoFilters,
+            onDismiss = onDismiss,
+        )
+    }
+}
 
-            Column(modifier = Modifier.selectableGroup()) {
-                VideoContentScale.entries.forEach { contentScale ->
-                    RadioButtonRow(
-                        isSelected = contentScale == videoContentScale,
-                        text = stringResource(contentScale.nameRes()),
-                        onClick = {
-                            onVideoContentScaleChanged(contentScale)
-                            onDismiss()
-                        },
-                    )
-                }
+@Composable
+fun VideoContentScaleSelectorContent(
+    videoContentScale: VideoContentScale,
+    onVideoContentScaleChanged: (VideoContentScale) -> Unit,
+    onShowVideoFilters: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+            .padding(horizontal = 24.dp),
+    ) {
+        FilledTonalButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("btn_open_video_filters"),
+            onClick = onShowVideoFilters,
+        ) {
+            Text(text = stringResource(R.string.video_filters))
+        }
+        Spacer(modifier = Modifier.size(16.dp))
+
+        Column(modifier = Modifier.selectableGroup()) {
+            VideoContentScale.entries.forEach { contentScale ->
+                RadioButtonRow(
+                    isSelected = contentScale == videoContentScale,
+                    text = stringResource(contentScale.nameRes()),
+                    onClick = {
+                        onVideoContentScaleChanged(contentScale)
+                        onDismiss()
+                    },
+                )
             }
         }
     }

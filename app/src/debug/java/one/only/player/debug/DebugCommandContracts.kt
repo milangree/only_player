@@ -94,6 +94,8 @@ internal val PLAYER_ACTION_METHODS = setOf(
     "player.screenshot",
     "player.background",
     "player.show_sleep_timer",
+    "player.show_menu",
+    "player.menu_back",
     "player.toggle_customize_controls",
     "player.stress_pan_zoom",
     "player.back",
@@ -126,6 +128,8 @@ internal val UI_PLAYER_ACTIONS = setOf(
     PlayerDebugCommandBridge.ACTION_SCREENSHOT,
     PlayerDebugCommandBridge.ACTION_BACKGROUND,
     PlayerDebugCommandBridge.ACTION_SHOW_SLEEP_TIMER,
+    PlayerDebugCommandBridge.ACTION_SHOW_MENU,
+    PlayerDebugCommandBridge.ACTION_MENU_BACK,
     PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS,
     PlayerDebugCommandBridge.ACTION_STRESS_PAN_ZOOM,
 )
