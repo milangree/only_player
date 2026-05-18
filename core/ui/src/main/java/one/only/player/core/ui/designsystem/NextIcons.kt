@@ -3,6 +3,7 @@ package one.only.player.core.ui.designsystem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AppSettingsAlt
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.rounded.MiscellaneousServices
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PanToolAlt
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Pinch
@@ -70,6 +72,8 @@ import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.SmartButton
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Straighten
@@ -123,9 +127,11 @@ object NextIcons {
     val Movie = Icons.Rounded.LocalMovies
     val Pip = Icons.Rounded.PictureInPictureAlt
     val Pinch = Icons.Rounded.Pinch
+    val Pause = Icons.Rounded.Pause
     val Play = Icons.Rounded.PlayArrow
     val Player = Icons.Rounded.PlayCircle
     val Priority = Icons.Rounded.PriorityHigh
+    val PlaylistPlay = Icons.AutoMirrored.Rounded.PlaylistPlay
     val Remove = Icons.Rounded.Remove
     val Replay = Icons.Rounded.Replay10
     val Resume = Icons.Rounded.ResetTv
@@ -134,6 +140,8 @@ object NextIcons {
     val Selection = Icons.Rounded.DoneAll
     val Settings = Icons.Rounded.Settings
     val Share = Icons.Rounded.Share
+    val SkipNext = Icons.Rounded.SkipNext
+    val SkipPrevious = Icons.Rounded.SkipPrevious
     val SmartButton = Icons.Rounded.SmartButton
     val Style = Icons.Rounded.Style
     val Subtitle = Icons.Rounded.Subtitles

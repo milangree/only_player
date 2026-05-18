@@ -36,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -95,7 +94,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(28.dp),
-                    painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                    imageVector = if (isPlaying) NextIcons.Pause else NextIcons.Play,
                     contentDescription = stringResource(R.string.player_controls_play_pause),
                     tint = Color.White,
                 )
@@ -135,7 +134,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(24.dp),
-                    painter = painterResource(R.drawable.ic_skip_prev),
+                    imageVector = NextIcons.SkipPrevious,
                     contentDescription = stringResource(R.string.player_controls_previous),
                     tint = if (hasPrevious) Color.White else Color.White.copy(alpha = 0.4f),
                 )
@@ -147,7 +146,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(24.dp),
-                    painter = painterResource(R.drawable.ic_skip_next),
+                    imageVector = NextIcons.SkipNext,
                     contentDescription = stringResource(R.string.player_controls_next),
                     tint = if (hasNext) Color.White else Color.White.copy(alpha = 0.4f),
                 )
@@ -170,7 +169,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(24.dp),
-                    painter = painterResource(R.drawable.ic_playlist),
+                    imageVector = NextIcons.PlaylistPlay,
                     contentDescription = stringResource(R.string.now_playing),
                     tint = Color.White,
                 )
@@ -181,7 +180,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(24.dp),
-                    painter = painterResource(R.drawable.ic_speed),
+                    imageVector = NextIcons.Speed,
                     contentDescription = stringResource(R.string.select_playback_speed),
                     tint = Color.White,
                 )
