@@ -95,6 +95,7 @@ internal val PLAYER_ACTION_METHODS = setOf(
     "player.background",
     "player.show_sleep_timer",
     "player.toggle_customize_controls",
+    "player.stress_pan_zoom",
     "player.back",
 )
 
@@ -126,6 +127,7 @@ internal val UI_PLAYER_ACTIONS = setOf(
     PlayerDebugCommandBridge.ACTION_BACKGROUND,
     PlayerDebugCommandBridge.ACTION_SHOW_SLEEP_TIMER,
     PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS,
+    PlayerDebugCommandBridge.ACTION_STRESS_PAN_ZOOM,
 )
 
 internal fun debugResult(

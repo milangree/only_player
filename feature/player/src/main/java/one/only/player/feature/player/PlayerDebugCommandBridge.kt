@@ -1,5 +1,6 @@
 package one.only.player.feature.player
 
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import java.util.UUID
@@ -29,13 +30,14 @@ object PlayerDebugCommandBridge {
     const val ACTION_BACKGROUND = "background"
     const val ACTION_SHOW_SLEEP_TIMER = "show_sleep_timer"
     const val ACTION_TOGGLE_CUSTOMIZE_CONTROLS = "toggle_customize_controls"
+    const val ACTION_STRESS_PAN_ZOOM = "stress_pan_zoom"
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
     private var registeredHandler: RegisteredHandler? = null
 
-    fun setHandler(handler: (String) -> Boolean): String {
+    fun setHandler(handler: (String, Bundle?) -> Boolean): String {
         val token = UUID.randomUUID().toString()
         registeredHandler = RegisteredHandler(token, handler)
         return token
@@ -47,10 +49,10 @@ object PlayerDebugCommandBridge {
         }
     }
 
-    fun dispatch(action: String): Boolean {
+    fun dispatch(action: String, extras: Bundle? = null): Boolean {
         val currentHandler = registeredHandler?.handler ?: return false
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            return currentHandler(action)
+            return currentHandler(action, extras)
         }
 
         val latch = CountDownLatch(1)
@@ -58,7 +60,7 @@ object PlayerDebugCommandBridge {
         var result = false
         mainHandler.post {
             if (!isExpired.get()) {
-                result = runCatching { currentHandler(action) }.getOrDefault(false)
+                result = runCatching { currentHandler(action, extras) }.getOrDefault(false)
             }
             latch.countDown()
         }
@@ -70,6 +72,6 @@ object PlayerDebugCommandBridge {
 
     private data class RegisteredHandler(
         val token: String,
-        val handler: (String) -> Boolean,
+        val handler: (String, Bundle?) -> Boolean,
     )
 }

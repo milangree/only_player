@@ -25,7 +25,7 @@ internal fun Context.runPlayerAction(
     extras: Bundle?,
 ): Bundle {
     val command = "player.$action"
-    if (action in UI_PLAYER_ACTIONS) return runPlayerUiAction(action)
+    if (action in UI_PLAYER_ACTIONS) return runPlayerUiAction(action, extras.withTarget(target))
 
     val value = extras.withTarget(target)
     return runCatching {
@@ -102,9 +102,9 @@ internal fun Context.runPlayerGet(target: String): Bundle {
     }
 }
 
-private fun runPlayerUiAction(action: String): Bundle {
+private fun runPlayerUiAction(action: String, extras: Bundle? = null): Bundle {
     val command = "player.$action"
-    val didHandle = PlayerDebugCommandBridge.dispatch(action)
+    val didHandle = PlayerDebugCommandBridge.dispatch(action, extras)
     return debugResult(
         isOk = didHandle,
         message = if (didHandle) "Handled player UI action: $action" else "Player screen is not ready for action: $action",

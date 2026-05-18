@@ -78,6 +78,7 @@ import androidx.media3.common.util.UnstableApi
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import one.only.player.core.common.Logger
 import one.only.player.core.data.repository.ExternalSubtitleFontSource
 import one.only.player.core.model.PlayerControl
@@ -569,7 +570,26 @@ internal fun MediaPlayerScreen(
         controlsVisibilityState.showControls()
     }
 
-    fun handleDebugPlayerAction(action: String): Boolean {
+    fun stressPanZoom(extras: android.os.Bundle?) {
+        val iterations = extras?.getString("value")?.toIntOrNull()
+            ?: extras?.getInt("value", 0)?.takeIf { it > 0 }
+            ?: 80
+        val intervalMs = extras?.getString("interval_ms")?.toLongOrNull()
+            ?: extras?.getLong("interval_ms", 0L)?.takeIf { it > 0L }
+            ?: 8L
+        scope.launch {
+            repeat(iterations) { i ->
+                val left = i * 2
+                val top = i
+                val right = left + 1600 + (i % 7)
+                val bottom = top + 900 + (i % 5)
+                pictureInPictureState.updateVideoViewRect(android.graphics.Rect(left, top, right, bottom))
+                delay(intervalMs)
+            }
+        }
+    }
+
+    fun handleDebugPlayerAction(action: String, extras: android.os.Bundle?): Boolean {
         if (isCustomizingControls && action != PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS) return false
         when (action) {
             PlayerDebugCommandBridge.ACTION_BACK -> onBackClick()
@@ -637,6 +657,9 @@ internal fun MediaPlayerScreen(
             PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS -> {
                 if (isCustomizingControls) exitControlCustomization() else enterControlCustomization()
             }
+            PlayerDebugCommandBridge.ACTION_STRESS_PAN_ZOOM -> {
+                stressPanZoom(extras)
+            }
             else -> return false
         }
         return true
@@ -644,7 +667,7 @@ internal fun MediaPlayerScreen(
 
     val currentDebugActionHandler = rememberUpdatedState(::handleDebugPlayerAction)
     DisposableEffect(Unit) {
-        val token = PlayerDebugCommandBridge.setHandler { action -> currentDebugActionHandler.value(action) }
+        val token = PlayerDebugCommandBridge.setHandler { action, extras -> currentDebugActionHandler.value(action, extras) }
         onDispose { PlayerDebugCommandBridge.clearHandler(token) }
     }
 

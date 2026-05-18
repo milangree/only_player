@@ -95,6 +95,8 @@ class PictureInPictureState(
         null
     }
 
+    private var lastAppliedAspectRatio: Rational? = null
+
     fun updateVideoViewRect(rect: Rect) {
         val resolvedRect = Rect(rect)
         if (videoViewRect == resolvedRect) return
@@ -104,11 +106,17 @@ class PictureInPictureState(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (resolvedRect.width() <= 0 || resolvedRect.height() <= 0) return
 
-        Rational(resolvedRect.width(), resolvedRect.height()).takeIf { it.toFloat() in 0.5f..2.39f }?.let {
-            pictureInPictureParamsBuilder.setAspectRatio(it)
+        val aspectRatio = Rational(resolvedRect.width(), resolvedRect.height())
+            .takeIf { it.toFloat() in 0.5f..2.39f }
+        if (aspectRatio == lastAppliedAspectRatio) return
+        lastAppliedAspectRatio = aspectRatio
+
+        if (aspectRatio != null) {
+            pictureInPictureParamsBuilder.setAspectRatio(aspectRatio)
         }
         pictureInPictureParamsBuilder.setSourceRectHint(resolvedRect)
-        activity.setPictureInPictureParams(pictureInPictureParamsBuilder.build())
+        val params = pictureInPictureParamsBuilder.build()
+        runCatching { activity.setPictureInPictureParams(params) }
     }
 
     fun enterPictureInPictureMode(): Boolean {
@@ -185,7 +193,8 @@ class PictureInPictureState(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
 
         pictureInPictureParamsBuilder.setAutoEnterEnabled(shouldAutoEnter && player.isPlaying)
-        activity.setPictureInPictureParams(pictureInPictureParamsBuilder.build())
+        val params = pictureInPictureParamsBuilder.build()
+        runCatching { activity.setPictureInPictureParams(params) }
     }
 
     private fun updatePictureInPictureActions() {
@@ -223,7 +232,8 @@ class PictureInPictureState(
         )
 
         pictureInPictureParamsBuilder.setActions(actions)
-        activity.setPictureInPictureParams(pictureInPictureParamsBuilder.build())
+        val params = pictureInPictureParamsBuilder.build()
+        runCatching { activity.setPictureInPictureParams(params) }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
