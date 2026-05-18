@@ -7,11 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.Player
+import one.only.player.core.model.DecoderPriority
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.VideoContentScale
 import one.only.player.core.ui.R
 import one.only.player.core.ui.components.VideoFiltersPanel
 import one.only.player.feature.player.extensions.noRippleClickable
+import one.only.player.feature.player.state.SleepTimerState
 import one.only.player.feature.player.state.SubtitleOptionsEvent
 
 @Composable
@@ -20,6 +22,7 @@ fun BoxScope.OverlayShowView(
     overlayView: OverlayView?,
     videoContentScale: VideoContentScale,
     playerPreferences: PlayerPreferences,
+    sleepTimerState: SleepTimerState,
     onDismiss: () -> Unit = {},
     onSelectSubtitleClick: () -> Unit = {},
     onAddOnlineSubtitleClick: (String) -> Unit = {},
@@ -30,6 +33,7 @@ fun BoxScope.OverlayShowView(
     onConfirmVideoFilters: (PlayerPreferences) -> Unit = {},
     onCloseVideoFilters: () -> Unit = {},
     onShowVideoFilters: () -> Unit = {},
+    onDecoderPriorityChanged: (DecoderPriority) -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -85,6 +89,19 @@ fun BoxScope.OverlayShowView(
         shouldShow = overlayView == OverlayView.PLAYLIST,
         player = player,
     )
+
+    SleepTimerSelectorView(
+        shouldShow = overlayView == OverlayView.SLEEP_TIMER,
+        sleepTimerState = sleepTimerState,
+        onDismiss = onDismiss,
+    )
+
+    DecoderPrioritySelectorView(
+        shouldShow = overlayView == OverlayView.DECODER_PRIORITY,
+        currentDecoderPriority = playerPreferences.decoderPriority,
+        onDecoderPriorityClick = onDecoderPriorityChanged,
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
@@ -120,4 +137,6 @@ enum class OverlayView {
     VIDEO_CONTENT_SCALE,
     VIDEO_FILTERS,
     PLAYLIST,
+    SLEEP_TIMER,
+    DECODER_PRIORITY,
 }

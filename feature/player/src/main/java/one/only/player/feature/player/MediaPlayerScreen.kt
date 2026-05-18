@@ -80,15 +80,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import one.only.player.core.common.Logger
 import one.only.player.core.data.repository.ExternalSubtitleFontSource
-import one.only.player.core.model.DecoderPriority
 import one.only.player.core.model.PlayerControl
 import one.only.player.core.model.PlayerControlZone
 import one.only.player.core.model.PlayerControlsLayout
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.ui.R as coreUiR
-import one.only.player.core.ui.components.OptionsDialog
-import one.only.player.core.ui.components.RadioTextButton
 import one.only.player.core.ui.extensions.copy
 import one.only.player.feature.player.buttons.NextButton
 import one.only.player.feature.player.buttons.PlayPauseButton
@@ -118,7 +115,6 @@ import one.only.player.feature.player.state.seekToPositionFormated
 import one.only.player.feature.player.ui.DoubleTapIndicator
 import one.only.player.feature.player.ui.OverlayShowView
 import one.only.player.feature.player.ui.OverlayView
-import one.only.player.feature.player.ui.SleepTimerDialog
 import one.only.player.feature.player.ui.SubtitleConfiguration
 import one.only.player.feature.player.ui.VerticalProgressView
 import one.only.player.feature.player.ui.controls.ControlsBottomView
@@ -314,8 +310,6 @@ internal fun MediaPlayerScreen(
         PlayerControl.entries.toSet() - hiddenPlayerControls
     }
     var shouldShowOverlay by remember { mutableStateOf(false) }
-    var isSleepTimerDialogShown by remember { mutableStateOf(false) }
-    var isDecoderDialogShown by remember { mutableStateOf(false) }
     var videoFiltersInitialPreferences by remember { mutableStateOf<PlayerPreferences?>(null) }
     var isAmbienceModeEnabled by remember { mutableStateOf(false) }
     val videoFiltersUnavailableMessage = stringResource(coreUiR.string.video_filters_unavailable_software_decoder)
@@ -623,8 +617,8 @@ internal fun MediaPlayerScreen(
                 controlsVisibilityState.hideControls()
             }
             PlayerDebugCommandBridge.ACTION_SHOW_DECODER -> {
-                isDecoderDialogShown = true
-                controlsVisibilityState.showControls()
+                overlayView = OverlayView.DECODER_PRIORITY
+                controlsVisibilityState.hideControls()
             }
             PlayerDebugCommandBridge.ACTION_SHOW_VIDEO_FILTERS -> showVideoFilters()
             PlayerDebugCommandBridge.ACTION_PIP -> {
@@ -637,7 +631,7 @@ internal fun MediaPlayerScreen(
             PlayerDebugCommandBridge.ACTION_SCREENSHOT -> onScreenshotClick()
             PlayerDebugCommandBridge.ACTION_BACKGROUND -> onPlayInBackgroundClick()
             PlayerDebugCommandBridge.ACTION_SHOW_SLEEP_TIMER -> {
-                isSleepTimerDialogShown = true
+                overlayView = OverlayView.SLEEP_TIMER
                 controlsVisibilityState.hideControls()
             }
             PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS -> {
@@ -825,7 +819,7 @@ internal fun MediaPlayerScreen(
                                             toggleControlVisibility(PlayerControl.SLEEP_TIMER)
                                         } else {
                                             controlsVisibilityState.hideControls()
-                                            isSleepTimerDialogShown = true
+                                            overlayView = OverlayView.SLEEP_TIMER
                                         }
                                     },
                                     onLockControlsClick = {
@@ -854,8 +848,8 @@ internal fun MediaPlayerScreen(
                                         if (isCustomizingControls) {
                                             toggleControlVisibility(PlayerControl.DECODER)
                                         } else {
-                                            controlsVisibilityState.showControls()
-                                            isDecoderDialogShown = true
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.DECODER_PRIORITY
                                         }
                                     },
                                     onAmbienceModeClick = {
@@ -1027,7 +1021,7 @@ internal fun MediaPlayerScreen(
                                             toggleControlVisibility(PlayerControl.SLEEP_TIMER)
                                         } else {
                                             controlsVisibilityState.hideControls()
-                                            isSleepTimerDialogShown = true
+                                            overlayView = OverlayView.SLEEP_TIMER
                                         }
                                     },
                                     sleepTimerState = sleepTimerState,
@@ -1057,8 +1051,8 @@ internal fun MediaPlayerScreen(
                                         if (isCustomizingControls) {
                                             toggleControlVisibility(PlayerControl.DECODER)
                                         } else {
-                                            controlsVisibilityState.showControls()
-                                            isDecoderDialogShown = true
+                                            controlsVisibilityState.hideControls()
+                                            overlayView = OverlayView.DECODER_PRIORITY
                                         }
                                     },
                                     onAmbienceModeClick = {
@@ -1202,6 +1196,7 @@ internal fun MediaPlayerScreen(
                 overlayView = overlayView,
                 videoContentScale = videoZoomAndContentScaleState.videoContentScale,
                 playerPreferences = playerPreferences,
+                sleepTimerState = sleepTimerState,
                 onDismiss = ::dismissOverlay,
                 onSelectSubtitleClick = onSelectSubtitleClick,
                 onAddOnlineSubtitleClick = onAddOnlineSubtitleClick,
@@ -1217,26 +1212,12 @@ internal fun MediaPlayerScreen(
                     overlayView = null
                     showVideoFilters()
                 },
+                onDecoderPriorityChanged = {
+                    viewModel.updateDecoderPriority(it)
+                    dismissOverlay()
+                },
             )
         }
-    }
-
-    if (isSleepTimerDialogShown) {
-        SleepTimerDialog(
-            sleepTimerState = sleepTimerState,
-            onDismiss = { isSleepTimerDialogShown = false },
-        )
-    }
-
-    if (isDecoderDialogShown) {
-        DecoderPriorityDialog(
-            currentDecoderPriority = playerPreferences.decoderPriority,
-            onDecoderPriorityClick = {
-                viewModel.updateDecoderPriority(it)
-                isDecoderDialogShown = false
-            },
-            onDismiss = { isDecoderDialogShown = false },
-        )
     }
 
     errorState.error?.let { error ->
@@ -1283,47 +1264,6 @@ internal fun MediaPlayerScreen(
             onBackClick()
         }
     }
-}
-
-@Composable
-private fun DecoderPriorityDialog(
-    currentDecoderPriority: DecoderPriority,
-    onDecoderPriorityClick: (DecoderPriority) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    OptionsDialog(
-        modifier = Modifier.testTag("dialog_decoder_priority"),
-        title = stringResource(coreUiR.string.decoder_priority),
-        onDismissClick = onDismiss,
-    ) {
-        DecoderPriority.entries.forEach { decoderPriority ->
-            item {
-                RadioTextButton(
-                    modifier = Modifier.testTag("btn_decoder_${decoderPriority.logSuffix()}"),
-                    text = decoderPriority.shortName(),
-                    isSelected = decoderPriority == currentDecoderPriority,
-                    onClick = { onDecoderPriorityClick(decoderPriority) },
-                )
-            }
-        }
-    }
-}
-
-private fun DecoderPriority.logSuffix(): String = when (this) {
-    DecoderPriority.AUTOMATIC -> "auto_hw"
-    DecoderPriority.AUTOMATIC_PREFER_DEVICE -> "auto_hw_plus"
-    DecoderPriority.DEVICE_ONLY -> "hw"
-    DecoderPriority.PREFER_DEVICE -> "hw_plus"
-    DecoderPriority.PREFER_APP -> "sw"
-}
-
-@Composable
-private fun DecoderPriority.shortName(): String = when (this) {
-    DecoderPriority.AUTOMATIC -> stringResource(coreUiR.string.auto_hw_decoder)
-    DecoderPriority.AUTOMATIC_PREFER_DEVICE -> stringResource(coreUiR.string.auto_hw_plus_decoder)
-    DecoderPriority.DEVICE_ONLY -> stringResource(coreUiR.string.hw_decoder)
-    DecoderPriority.PREFER_DEVICE -> stringResource(coreUiR.string.hw_plus_decoder)
-    DecoderPriority.PREFER_APP -> stringResource(coreUiR.string.sw_decoder)
 }
 
 @Composable
