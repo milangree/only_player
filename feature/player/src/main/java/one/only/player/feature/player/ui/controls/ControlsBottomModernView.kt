@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.time.Duration.Companion.milliseconds
 import one.only.player.core.ui.R
+import one.only.player.core.ui.designsystem.NextIcons
 import one.only.player.feature.player.LocalControlsVisibilityState
 import one.only.player.feature.player.extensions.formatted
 import one.only.player.feature.player.extensions.noRippleClickable
@@ -157,7 +159,7 @@ fun ControlsBottomModernView(
             ) {
                 Icon(
                     modifier = Modifier.size(24.dp),
-                    painter = painterResource(R.drawable.ic_screen_rotation),
+                    imageVector = NextIcons.Rotation,
                     contentDescription = stringResource(R.string.screen_rotation),
                     tint = Color.White,
                 )
@@ -208,7 +210,7 @@ private fun ModernSeekbar(
             thumb = {
                 Box(
                     modifier = Modifier
-                        .size(16.dp)
+                        .size(14.dp)
                         .border(2.dp, Color.White, CircleShape)
                         .padding(2.dp)
                         .clip(CircleShape)
@@ -218,6 +220,7 @@ private fun ModernSeekbar(
             track = { sliderState ->
                 SliderDefaults.Track(
                     sliderState = sliderState,
+                    modifier = Modifier.height(4.dp),
                     colors = SliderDefaults.colors(
                         activeTrackColor = accentColor,
                         inactiveTrackColor = Color.White.copy(alpha = 0.3f),

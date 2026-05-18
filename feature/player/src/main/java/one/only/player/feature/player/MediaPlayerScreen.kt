@@ -1361,10 +1361,7 @@ internal fun MediaPlayerScreen(
                             onVideoContentScaleChanged = {
                                 videoZoomAndContentScaleState.onVideoContentScaleChanged(it)
                             },
-                            onShowVideoFilters = {
-                                menuRouteStack = listOf(MenuRoute.Root)
-                                navigateToMenuRoute(MenuRoute.VideoFilters)
-                            },
+                            onShowVideoFilters = null,
                             onDismiss = ::dismissOverlay,
                         )
                         MenuRoute.VideoFilters -> VideoFiltersPanel(

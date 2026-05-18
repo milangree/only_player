@@ -26,7 +26,7 @@ fun BoxScope.VideoContentScaleSelectorView(
     shouldShow: Boolean,
     videoContentScale: VideoContentScale,
     onVideoContentScaleChanged: (VideoContentScale) -> Unit,
-    onShowVideoFilters: () -> Unit,
+    onShowVideoFilters: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     OverlayView(
@@ -47,7 +47,7 @@ fun BoxScope.VideoContentScaleSelectorView(
 fun VideoContentScaleSelectorContent(
     videoContentScale: VideoContentScale,
     onVideoContentScaleChanged: (VideoContentScale) -> Unit,
-    onShowVideoFilters: () -> Unit,
+    onShowVideoFilters: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     Column(
@@ -56,15 +56,17 @@ fun VideoContentScaleSelectorContent(
             .padding(bottom = 24.dp)
             .padding(horizontal = 24.dp),
     ) {
-        FilledTonalButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("btn_open_video_filters"),
-            onClick = onShowVideoFilters,
-        ) {
-            Text(text = stringResource(R.string.video_filters))
+        if (onShowVideoFilters != null) {
+            FilledTonalButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_open_video_filters"),
+                onClick = onShowVideoFilters,
+            ) {
+                Text(text = stringResource(R.string.video_filters))
+            }
+            Spacer(modifier = Modifier.size(16.dp))
         }
-        Spacer(modifier = Modifier.size(16.dp))
 
         Column(modifier = Modifier.selectableGroup()) {
             VideoContentScale.entries.forEach { contentScale ->
