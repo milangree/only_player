@@ -14,6 +14,17 @@ plugins {
     alias(libs.plugins.ktlint) apply false
 }
 
+versionCatalogUpdate {
+    keep {
+        versions.addAll(
+            "android-compileSdk",
+            "android-jvm",
+            "android-minSdk",
+            "android-targetSdk",
+        )
+    }
+}
+
 subprojects {
     apply(plugin = rootProject.libs.plugins.ktlint.get().pluginId)
     apply(plugin = rootProject.libs.plugins.aboutLibraries.get().pluginId)

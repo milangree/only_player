@@ -1,10 +1,12 @@
-- 修复 ASS/SSA 字幕位置偏移，缩放和平移画面时字幕保持居中且更易读
-- 改进 ASS/SSA 字幕字体兼容性，修复部分双语字幕英文空格过窄的问题
+- 修复 MKV 冷缓存下拖动和跳转不准的问题
+- 新增删除视频缓存，清理缩略图、媒体列表快照、字幕缓存和 MKV 跳转数据
+- 修复字幕位置偏移
 
 <details>
 <summary>English Version</summary>
 
-- Fix ASS/SSA subtitle alignment so subtitles stay centered and readable while zooming or panning the video
-- Improve ASS/SSA font compatibility and fix overly tight English word spacing in some bilingual subtitles
+- Fix inaccurate MKV dragging and seeking when seek data is not cached yet
+- Add video cache deletion for thumbnails, media list snapshots, subtitle cache, and MKV seek data
+- Fix subtitle alignment issues
 
 </details>

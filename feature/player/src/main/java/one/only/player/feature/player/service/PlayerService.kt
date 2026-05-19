@@ -1450,6 +1450,13 @@ class PlayerService : MediaSessionService() {
         return "scheme=${scheme.orEmpty()} host=${host.orEmpty()} extension=$extension"
     }
 
+    private fun String.toPrivateMediaLogSummary(): String {
+        val uri = Uri.parse(this)
+        val extension = uri.lastPathSegment?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase().orEmpty()
+        val hash = hashCode().toUInt().toString(radix = 16)
+        return "scheme=${uri.scheme.orEmpty()} extension=$extension hash=$hash"
+    }
+
     private fun applyLoudnessEnhancerGain() {
         val enhancer = loudnessEnhancer ?: return
         val gain = requestedVolumeGain
@@ -2228,7 +2235,7 @@ class PlayerService : MediaSessionService() {
         val targetPosition = maxPosition?.let { targetPositionMs.coerceIn(0L, it) } ?: targetPositionMs.coerceAtLeast(0L)
 
         if (!initialItem.mediaMetadata.isApproximateSeekEnabled || initialItem.mediaId in preciseSeekMediaIds) {
-            Logger.info(TAG, "Precise seek direct mediaId=${initialItem.mediaId} target=$targetPosition")
+            Logger.info(TAG, "Precise seek direct media=${initialItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
             player.seekTo(targetPosition)
             return SessionResult(SessionResult.RESULT_SUCCESS)
         }
@@ -2245,12 +2252,12 @@ class PlayerService : MediaSessionService() {
             return SessionResult(SessionError.ERROR_BAD_VALUE)
         }
         if (!currentItem.mediaMetadata.isApproximateSeekEnabled || currentItem.mediaId in preciseSeekMediaIds) {
-            Logger.info(TAG, "Precise seek direct mediaId=${currentItem.mediaId} target=$targetPosition")
+            Logger.info(TAG, "Precise seek direct media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
             player.seekTo(targetPosition)
             return SessionResult(SessionResult.RESULT_SUCCESS)
         }
         if (seekMap == null) {
-            Logger.info(TAG, "Precise seek postponed mediaId=${currentItem.mediaId} target=$targetPosition")
+            Logger.info(TAG, "Precise seek postponed media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
             player.seekTo(targetPosition)
             return SessionResult(SessionResult.RESULT_SUCCESS)
         }
@@ -2264,7 +2271,7 @@ class PlayerService : MediaSessionService() {
         val shouldPlayWhenReady = player.playWhenReady
         Logger.info(
             TAG,
-            "Promote current item to precise seek mediaId=${currentItem.mediaId} target=$targetPosition hasCachedSeekMap=true",
+            "Promote current item to precise seek media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition hasCachedSeekMap=true",
         )
         player.addMediaSource(currentIndex + 1, createMediaSource(updatedMediaItem))
         player.seekTo(currentIndex + 1, targetPosition)
@@ -2305,7 +2312,7 @@ class PlayerService : MediaSessionService() {
         val targetPosition = maxPosition?.let { targetPositionMs.coerceIn(0L, it) } ?: targetPositionMs.coerceAtLeast(0L)
 
         if (!currentItem.mediaMetadata.isApproximateSeekEnabled) {
-            Logger.info(TAG, "Precise seek direct mediaId=${currentItem.mediaId} target=$targetPosition")
+            Logger.info(TAG, "Precise seek direct media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
             player.seekTo(targetPosition)
             return SessionResult(SessionResult.RESULT_SUCCESS)
         }
