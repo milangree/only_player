@@ -147,13 +147,12 @@ fun PlayerContentFrame(
 
             if (!presentationState.coverSurface) {
                 val subtitleModifier = if (isAssSubtitleSelected) {
+                    val subtitleScale = min(fillX, fillY)
                     Modifier
                         .requiredSize(surfaceWidthDp, surfaceHeightDp)
                         .graphicsLayer {
-                            scaleX = baseScaleX * videoZoomAndContentScaleState.zoom
-                            scaleY = baseScaleY * videoZoomAndContentScaleState.zoom
-                            translationX = videoZoomAndContentScaleState.offset.x
-                            translationY = videoZoomAndContentScaleState.offset.y
+                            scaleX = subtitleScale
+                            scaleY = subtitleScale
                         }
                 } else {
                     val subtitleWidthDp = with(density) { min(containerWidth, videoWidth * baseScaleX).toDp() }

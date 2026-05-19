@@ -48,7 +48,7 @@ suspend fun Context.uriToSubtitleConfiguration(
     val label = getFilenameFromUri(uri)
     val mimeType = uri.getSubtitleMime(displayName = label)
     val utf8ConvertedUri = convertToUTF8(uri = uri, charset = charset)
-    val subtitleUri = normalizeAssStyleFonts(uri = utf8ConvertedUri, label = label, mimeType = mimeType)
+    val subtitleUri = normalizeAssFonts(uri = utf8ConvertedUri, label = label, mimeType = mimeType)
     Logger.debug(
         "SubtitleConfig",
         "uri=$uri, convertedUri=$utf8ConvertedUri, subtitleUri=$subtitleUri, mime=$mimeType, label=$label",
@@ -61,7 +61,7 @@ suspend fun Context.uriToSubtitleConfiguration(
     }.build()
 }
 
-private suspend fun Context.normalizeAssStyleFonts(
+private suspend fun Context.normalizeAssFonts(
     uri: Uri,
     label: String,
     mimeType: String,
@@ -74,10 +74,10 @@ private suspend fun Context.normalizeAssStyleFonts(
             val sourceText = contentResolver.openInputStream(uri)?.use { inputStream ->
                 inputStream.reader(StandardCharsets.UTF_8).readText()
             } ?: return@withContext uri
-            val normalizedText = sourceText.normalizeAssStyleFonts()
+            val normalizedText = sourceText.normalizeAssFonts()
             if (normalizedText == sourceText) return@withContext uri
 
-            val file = File(subtitleCacheDir, normalizedAssStyleFileName(label = label, uri = uri))
+            val file = File(subtitleCacheDir, normalizedAssFontFileName(label = label, uri = uri))
             file.writeText(normalizedText, StandardCharsets.UTF_8)
             Uri.fromFile(file)
         } catch (exception: Exception) {
@@ -87,32 +87,38 @@ private suspend fun Context.normalizeAssStyleFonts(
     }
 }
 
-private fun String.normalizeAssStyleFonts(): String {
+private fun String.normalizeAssFonts(): String {
     val lineSeparator = detectLineSeparator()
-    var isInStyleSection = false
-    var fontNameIndex: Int? = null
+    var section = AssSection.Other
+    var styleFontNameIndex: Int? = null
+    var eventTextIndex: Int? = null
     var hasChanges = false
     val normalizedLines = lineSequence().map { line ->
         val trimmedLine = line.trim()
         if (trimmedLine.startsWith("[") && trimmedLine.endsWith("]")) {
-            isInStyleSection = trimmedLine.lowercase(Locale.US) in ASS_STYLE_SECTION_HEADERS
-            fontNameIndex = null
-            return@map line
-        }
-        if (!isInStyleSection) return@map line
-        if (trimmedLine.startsWith("Format:", ignoreCase = true)) {
-            fontNameIndex = trimmedLine
-                .substringAfter(':')
-                .split(',')
-                .indexOfFirst { field -> field.trim().equals("Fontname", ignoreCase = true) }
-                .takeIf { index -> index >= 0 }
+            section = trimmedLine.assSection()
+            styleFontNameIndex = null
+            eventTextIndex = null
             return@map line
         }
 
-        val styleFontIndex = fontNameIndex ?: return@map line
-        if (!trimmedLine.startsWith("Style:", ignoreCase = true)) return@map line
-
-        val normalizedLine = line.normalizeAssStyleFont(fontNameIndex = styleFontIndex)
+        val normalizedLine = when {
+            section == AssSection.Style && trimmedLine.startsWith("Format:", ignoreCase = true) -> {
+                styleFontNameIndex = trimmedLine.assFormatFieldIndex("Fontname")
+                line
+            }
+            section == AssSection.Style && trimmedLine.startsWith("Style:", ignoreCase = true) -> {
+                styleFontNameIndex?.let(line::normalizeAssStyleFont) ?: line
+            }
+            section == AssSection.Event && trimmedLine.startsWith("Format:", ignoreCase = true) -> {
+                eventTextIndex = trimmedLine.assFormatFieldIndex("Text")
+                line
+            }
+            section == AssSection.Event && isAssEventLine(trimmedLine) -> {
+                eventTextIndex?.let(line::normalizeAssEventText) ?: line
+            }
+            else -> line
+        }
         if (normalizedLine != line) hasChanges = true
         normalizedLine
     }.toList()
@@ -122,6 +128,17 @@ private fun String.normalizeAssStyleFonts(): String {
     val normalizedText = normalizedLines.joinToString(separator = lineSeparator)
     return if (endsWith("\n") || endsWith("\r")) normalizedText + lineSeparator else normalizedText
 }
+
+private fun String.assSection(): AssSection = when (lowercase(Locale.US)) {
+    in ASS_STYLE_SECTION_HEADERS -> AssSection.Style
+    "[events]" -> AssSection.Event
+    else -> AssSection.Other
+}
+
+private fun String.assFormatFieldIndex(name: String): Int? = substringAfter(':')
+    .split(',')
+    .indexOfFirst { field -> field.trim().equals(name, ignoreCase = true) }
+    .takeIf { index -> index >= 0 }
 
 private fun String.normalizeAssStyleFont(fontNameIndex: Int): String {
     val headerEndIndex = indexOf(':')
@@ -133,7 +150,7 @@ private fun String.normalizeAssStyleFont(fontNameIndex: Int): String {
 
     val fontField = fields[fontNameIndex]
     val fontName = fontField.trim().trim('"')
-    if (fontName.lowercase(Locale.US) !in ASS_WINDOWS_FONT_NAMES) return this
+    if (fontName.lowercase(Locale.US) !in ASS_FONT_NAMES_REQUIRING_FALLBACK) return this
 
     val leadingWhitespace = fontField.takeWhile(Char::isWhitespace)
     val trailingWhitespace = fontField.takeLastWhile(Char::isWhitespace)
@@ -141,23 +158,91 @@ private fun String.normalizeAssStyleFont(fontNameIndex: Int): String {
     return prefix + fields.joinToString(",")
 }
 
+private fun String.normalizeAssEventText(textIndex: Int): String {
+    val headerEndIndex = indexOf(':')
+    if (headerEndIndex < 0) return this
+
+    val prefix = substring(0, headerEndIndex + 1)
+    val fields = substring(headerEndIndex + 1).split(',', limit = textIndex + 2).toMutableList()
+    if (textIndex !in fields.indices) return this
+
+    fields[textIndex] = fields[textIndex]
+        .normalizeAssInlineFonts()
+        .widenLatinSpaces()
+    return prefix + fields.joinToString(",")
+}
+
+private fun String.normalizeAssInlineFonts(): String = ASS_INLINE_FONT_REGEX.replace(this) { match ->
+    val fontName = match.groupValues[1].trim()
+    if (fontName.lowercase(Locale.US) in ASS_FONT_NAMES_REQUIRING_FALLBACK) {
+        "\\fn$ASS_ANDROID_FALLBACK_FONT"
+    } else {
+        match.value
+    }
+}
+
+private fun String.widenLatinSpaces(): String = buildString(length) {
+    var isInOverrideBlock = false
+    for (index in this@widenLatinSpaces.indices) {
+        val char = this@widenLatinSpaces[index]
+        when (char) {
+            '{' -> isInOverrideBlock = true
+            '}' -> isInOverrideBlock = false
+        }
+        if (char == ' ' && !isInOverrideBlock && hasLatinNeighbor(index)) {
+            append(' ')
+            append(' ')
+        } else {
+            append(char)
+        }
+    }
+}
+
+private fun String.hasLatinNeighbor(index: Int): Boolean = previousVisibleChar(index)?.isLatinLetterOrDigit() == true &&
+    nextVisibleChar(index)?.isLatinLetterOrDigit() == true
+
+private fun String.previousVisibleChar(index: Int): Char? {
+    var currentIndex = index - 1
+    while (currentIndex >= 0 && this[currentIndex].isWhitespace()) currentIndex--
+    return getOrNull(currentIndex)
+}
+
+private fun String.nextVisibleChar(index: Int): Char? {
+    var currentIndex = index + 1
+    while (currentIndex < length && this[currentIndex].isWhitespace()) currentIndex++
+    return getOrNull(currentIndex)
+}
+
+private fun Char.isLatinLetterOrDigit(): Boolean = this in 'A'..'Z' || this in 'a'..'z' || this in '0'..'9'
+
+private fun isAssEventLine(line: String): Boolean = line.startsWith("Dialogue:", ignoreCase = true) ||
+    line.startsWith("Comment:", ignoreCase = true)
+
 private fun String.detectLineSeparator(): String = when {
     contains("\r\n") -> "\r\n"
     contains("\r") -> "\r"
     else -> "\n"
 }
 
-private fun normalizedAssStyleFileName(label: String, uri: Uri): String {
+private fun normalizedAssFontFileName(label: String, uri: Uri): String {
     val baseName = label.ifBlank { "subtitle" }.substringBeforeLast('.', missingDelimiterValue = label.ifBlank { "subtitle" })
     val extension = label.substringAfterLast('.', missingDelimiterValue = "ass")
     val cacheKey = uri.toString().hashCode().toUInt().toString(radix = 16)
-    return "$baseName-$cacheKey.ass-style.$extension"
+    return "$baseName-$cacheKey.ass-font.$extension"
 }
 
 fun Bundle.getParcelableUriArray(key: String): ArrayList<Uri>? = BundleCompat.getParcelableArrayList(this, key, Uri::class.java)
 
 private const val SUBTITLE_CONFIG_TAG = "SubtitleConfig"
 private const val ASS_ANDROID_FALLBACK_FONT = "Roboto"
+
+private enum class AssSection {
+    Style,
+    Event,
+    Other,
+}
+
+private val ASS_INLINE_FONT_REGEX = Regex("\\\\fn([^\\\\}]+)")
 
 private val NETWORK_URI_SCHEMES = setOf("http", "https", "ftp")
 
@@ -166,7 +251,7 @@ private val ASS_STYLE_SECTION_HEADERS = setOf(
     "[v4+ styles]",
 )
 
-private val ASS_WINDOWS_FONT_NAMES = setOf(
+private val ASS_FONT_NAMES_REQUIRING_FALLBACK = setOf(
     "arial",
     "calibri",
     "cambria",

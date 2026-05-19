@@ -115,7 +115,7 @@ data class PlayerPreferences(
         const val MIN_LONG_PRESS_CONTROLS_SPEED = 0.2f
         const val MAX_LONG_PRESS_CONTROLS_SPEED = 4.0f
         const val DEFAULT_SUBTITLE_TEXT_SIZE = 20
-        const val DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION = 0.08f
+        const val DEFAULT_SUBTITLE_BOTTOM_PADDING_FRACTION = 0f
         const val MIN_SUBTITLE_BOTTOM_PADDING_FRACTION = 0f
         const val MAX_SUBTITLE_BOTTOM_PADDING_FRACTION = 0.4f
         const val DEFAULT_CONTROLLER_AUTO_HIDE_TIMEOUT = 4

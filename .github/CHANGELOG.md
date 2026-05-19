@@ -1,10 +1,10 @@
-- 项目说明：issues 不是许愿池，这是免费项目，恕难满足所有人的需求，请勿过度期待，市面上有不少替代品可以选择
-- 调整现代播放器布局：旋转图标尺寸与其它按钮统一，进度条收窄并改用圆点滑块，视频缩放面板不再重复显示滤镜入口，布局选项中"现代"放到了前面
+- 修复 ASS/SSA 字幕位置偏移，缩放和平移画面时字幕保持居中且更易读
+- 改进 ASS/SSA 字幕字体兼容性，修复部分双语字幕英文空格过窄的问题
 
 <details>
 <summary>English Version</summary>
 
-- A note: issues are for feedback, not a wishlist. This is a free project and won't address every request — please keep expectations reasonable, and there are plenty of alternatives out there
-- Refine the modern player layout: align the rotate icon with the other buttons, slim down the seekbar with a dot thumb, drop the duplicate filters shortcut from the scale panel, and put "Modern" first in the layout picker
+- Fix ASS/SSA subtitle alignment so subtitles stay centered and readable while zooming or panning the video
+- Improve ASS/SSA font compatibility and fix overly tight English word spacing in some bilingual subtitles
 
 </details>
