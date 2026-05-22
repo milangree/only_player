@@ -9,12 +9,15 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import one.only.player.core.common.extensions.canonicalPathOrSelf
 import one.only.player.core.common.extensions.prettyName
 import one.only.player.core.common.hasManageExternalStorageAccess
+import one.only.player.core.data.repository.MediaMoveSummary
 import one.only.player.core.data.repository.MediaRepository
 import one.only.player.core.data.repository.PreferencesRepository
 import one.only.player.core.domain.GetSortedMediaUseCase
@@ -23,6 +26,7 @@ import one.only.player.core.media.sync.MediaInfoSynchronizer
 import one.only.player.core.media.sync.MediaSynchronizer
 import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
+import one.only.player.core.model.Video
 import one.only.player.core.ui.base.DataState
 import one.only.player.feature.videopicker.navigation.FolderArgs
 import one.only.player.feature.videopicker.navigation.MediaPickerScreenMode
@@ -37,6 +41,7 @@ class MediaPickerViewModel @Inject constructor(
     private val mediaInfoSynchronizer: MediaInfoSynchronizer,
     private val mediaSynchronizer: MediaSynchronizer,
     private val snapshotCache: MediaPickerSnapshotCache,
+    private val moveSelectionStore: MediaPickerMoveSelectionStore,
 ) : ViewModel() {
 
     private val folderArgs = FolderArgs(savedStateHandle)
@@ -96,6 +101,16 @@ class MediaPickerViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            moveSelectionStore.selection.collect { selection ->
+                uiStateInternal.update { currentState ->
+                    currentState.copy(
+                        moveSelection = selection,
+                    )
+                }
+            }
+        }
     }
 
     fun onEvent(event: MediaPickerUiEvent) {
@@ -103,6 +118,10 @@ class MediaPickerViewModel @Inject constructor(
             is MediaPickerUiEvent.DeleteFolders -> permanentlyDeleteFolders(event.folders)
             is MediaPickerUiEvent.DeleteVideos -> permanentlyDeleteVideos(event.videos)
             is MediaPickerUiEvent.MoveVideosToRecycleBin -> moveVideosToRecycleBin(event.videos)
+            is MediaPickerUiEvent.StartMoveSelection -> startMoveSelection(event.videoUris, event.folderPaths)
+            is MediaPickerUiEvent.MoveSelectionToFolder -> moveSelectionToFolder(event.targetFolderPath)
+            is MediaPickerUiEvent.CancelMoveSelection -> cancelMoveSelection()
+            is MediaPickerUiEvent.ClearMoveResult -> clearMoveResult()
             is MediaPickerUiEvent.RestoreVideos -> restoreVideos(event.videos)
             is MediaPickerUiEvent.PermanentlyDeleteVideos -> permanentlyDeleteVideos(event.videos)
             is MediaPickerUiEvent.ShareVideos -> shareVideos(event.videos)
@@ -141,6 +160,62 @@ class MediaPickerViewModel @Inject constructor(
     private fun moveVideosToRecycleBin(uris: List<String>) {
         viewModelScope.launch {
             mediaRepository.moveVideosToRecycleBin(uris)
+        }
+    }
+
+    private fun startMoveSelection(
+        videoUris: List<String>,
+        folderPaths: List<String>,
+    ) {
+        val rootFolder = (uiStateInternal.value.mediaDataState as? DataState.Success)?.value
+        moveSelectionStore.set(
+            MediaPickerMoveSelection(
+                videoUris = videoUris,
+                videoParentPaths = rootFolder?.allMediaList
+                    ?.filter { video -> video.uriString in videoUris }
+                    ?.map(Video::parentPath)
+                    .orEmpty(),
+                folderPaths = folderPaths,
+                folderParentPaths = rootFolder?.folderList
+                    ?.filter { folder -> folder.path in folderPaths }
+                    ?.mapNotNull(Folder::parentPath)
+                    .orEmpty(),
+            ),
+        )
+    }
+
+    private fun cancelMoveSelection() {
+        if (uiStateInternal.value.isMovingSelection) return
+        moveSelectionStore.clear()
+    }
+
+    private fun clearMoveResult() {
+        uiStateInternal.update { currentState ->
+            currentState.copy(moveResult = null)
+        }
+    }
+
+    private fun moveSelectionToFolder(targetFolderPath: String) {
+        val selection = uiStateInternal.value.moveSelection ?: return
+        if (uiStateInternal.value.isMovingSelection) return
+        viewModelScope.launch {
+            uiStateInternal.update { currentState ->
+                currentState.copy(
+                    isMovingSelection = true,
+                    moveResult = null,
+                )
+            }
+            val summary = mediaRepository.moveVideosToFolder(selection.videoUris, targetFolderPath) +
+                mediaRepository.moveFoldersToFolder(selection.folderPaths, targetFolderPath)
+            if (summary.movedCount > 0) {
+                moveSelectionStore.clear()
+            }
+            uiStateInternal.update { currentState ->
+                currentState.copy(
+                    isMovingSelection = false,
+                    moveResult = summary,
+                )
+            }
         }
     }
 
@@ -206,12 +281,22 @@ data class MediaPickerUiState(
     val isRefreshing: Boolean = false,
     val preferences: ApplicationPreferences = ApplicationPreferences(),
     val screenMode: MediaPickerScreenMode = MediaPickerScreenMode.LIBRARY,
+    val moveSelection: MediaPickerMoveSelection? = null,
+    val isMovingSelection: Boolean = false,
+    val moveResult: MediaMoveSummary? = null,
 )
 
 sealed interface MediaPickerUiEvent {
     data class DeleteVideos(val videos: List<String>) : MediaPickerUiEvent
     data class DeleteFolders(val folders: List<Folder>) : MediaPickerUiEvent
     data class MoveVideosToRecycleBin(val videos: List<String>) : MediaPickerUiEvent
+    data class StartMoveSelection(
+        val videoUris: List<String>,
+        val folderPaths: List<String>,
+    ) : MediaPickerUiEvent
+    data class MoveSelectionToFolder(val targetFolderPath: String) : MediaPickerUiEvent
+    data object CancelMoveSelection : MediaPickerUiEvent
+    data object ClearMoveResult : MediaPickerUiEvent
     data class RestoreVideos(val videos: List<String>) : MediaPickerUiEvent
     data class PermanentlyDeleteVideos(val videos: List<String>) : MediaPickerUiEvent
     data class ShareVideos(val videos: List<String>) : MediaPickerUiEvent
@@ -221,4 +306,37 @@ sealed interface MediaPickerUiEvent {
     data class AddToSync(val uri: Uri) : MediaPickerUiEvent
     data class UpdateMenu(val preferences: ApplicationPreferences) : MediaPickerUiEvent
     data class CacheFolderSnapshot(val folder: Folder) : MediaPickerUiEvent
+}
+
+@Stable
+data class MediaPickerMoveSelection(
+    val videoUris: List<String> = emptyList(),
+    val videoParentPaths: List<String> = emptyList(),
+    val folderPaths: List<String> = emptyList(),
+    val folderParentPaths: List<String> = emptyList(),
+) {
+    val isEmpty: Boolean = videoUris.isEmpty() && folderPaths.isEmpty()
+
+    fun canMoveTo(targetFolderPath: String): Boolean {
+        val targetPath = targetFolderPath.canonicalPathOrSelf()
+        if (targetPath in videoParentPaths.map(String::canonicalPathOrSelf)) return false
+        if (targetPath in folderParentPaths.map(String::canonicalPathOrSelf)) return false
+        return folderPaths.map(String::canonicalPathOrSelf).none { folderPath ->
+            targetPath == folderPath || targetPath.startsWith("$folderPath/")
+        }
+    }
+}
+
+@Singleton
+class MediaPickerMoveSelectionStore @Inject constructor() {
+    private val selectionInternal = MutableStateFlow<MediaPickerMoveSelection?>(null)
+    val selection = selectionInternal.asStateFlow()
+
+    fun set(selection: MediaPickerMoveSelection) {
+        selectionInternal.value = selection.takeUnless(MediaPickerMoveSelection::isEmpty)
+    }
+
+    fun clear() {
+        selectionInternal.value = null
+    }
 }

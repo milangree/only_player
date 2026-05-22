@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import one.only.player.core.data.models.RemotePlaybackInfo
 import one.only.player.core.data.models.VideoState
+import one.only.player.core.data.repository.MediaMoveSummary
 import one.only.player.core.data.repository.MediaRepository
 import one.only.player.core.data.repository.isRemotePlaybackStateKey
 import one.only.player.core.model.Folder
@@ -97,6 +98,16 @@ class FakeMediaRepository : MediaRepository {
         }
         recycleBinUris.addAll(uris)
     }
+
+    override suspend fun moveVideosToFolder(
+        uris: List<String>,
+        targetFolderPath: String,
+    ): MediaMoveSummary = MediaMoveSummary(movedCount = uris.distinct().size)
+
+    override suspend fun moveFoldersToFolder(
+        folderPaths: List<String>,
+        targetFolderPath: String,
+    ): MediaMoveSummary = MediaMoveSummary(movedCount = folderPaths.distinct().size)
 
     override suspend fun restoreVideosFromRecycleBin(uris: List<String>) {
         recycleBinUris.removeAll(uris.toSet())

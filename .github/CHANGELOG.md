@@ -1,8 +1,12 @@
-- 修复部分设备上无法选择 ASS 外部字幕的问题
+- 改进媒体库多选操作，移动、删除、分享等操作收纳到顶部菜单
+- 新增本地视频和文件夹移动功能
+- 调整媒体选中背景色，提升亮色和暗色主题下的可读性
 
 <details>
 <summary>English Version</summary>
 
-- Fix ASS external subtitles being unavailable for selection on some devices
+- Improve media library multi-select actions by moving actions into the top menu
+- Add local video and folder move support
+- Adjust selected media background color for better readability in light and dark themes
 
 </details>

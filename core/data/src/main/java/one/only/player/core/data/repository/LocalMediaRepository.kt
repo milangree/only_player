@@ -20,6 +20,7 @@ import one.only.player.core.database.dao.MediumStateDao
 import one.only.player.core.database.entities.MediumStateEntity
 import one.only.player.core.database.relations.DirectoryWithMedia
 import one.only.player.core.database.relations.MediumWithInfo
+import one.only.player.core.media.services.MediaMoveResult
 import one.only.player.core.media.services.MediaService
 import one.only.player.core.media.sync.MediaSynchronizer
 import one.only.player.core.model.Folder
@@ -238,6 +239,55 @@ class LocalMediaRepository @Inject constructor(
         }
     }
 
+    override suspend fun moveVideosToFolder(
+        uris: List<String>,
+        targetFolderPath: String,
+    ): MediaMoveSummary {
+        val distinctUris = uris.distinct()
+        if (distinctUris.isEmpty()) return MediaMoveSummary()
+        if (targetFolderPath.isBlank()) return MediaMoveSummary(failedCount = distinctUris.size)
+
+        var movedCount = 0
+        distinctUris.forEach { uriString ->
+            val moved = mediaService.moveMediaToFolder(uriString.toUri(), targetFolderPath) ?: return@forEach
+            updateMovedMedium(uriString, moved)
+            mediaSynchronizer.registerManualVideoPath(moved.path)
+            mediaSynchronizer.refresh(moved.path)
+            movedCount++
+        }
+        return MediaMoveSummary(
+            movedCount = movedCount,
+            failedCount = distinctUris.size - movedCount,
+        )
+    }
+
+    override suspend fun moveFoldersToFolder(
+        folderPaths: List<String>,
+        targetFolderPath: String,
+    ): MediaMoveSummary {
+        val distinctFolderPaths = folderPaths.distinct()
+        if (distinctFolderPaths.isEmpty()) return MediaMoveSummary()
+        if (targetFolderPath.isBlank()) return MediaMoveSummary(failedCount = distinctFolderPaths.size)
+
+        var movedCount = 0
+        distinctFolderPaths.forEach { folderPath ->
+            val movedMedia = mediaService.moveFolderToFolder(folderPath, targetFolderPath)
+            if (movedMedia.isEmpty()) return@forEach
+
+            movedMedia.forEach { moved ->
+                val uriString = moved.originalPath?.let { originalPath -> mediumDao.getByPath(originalPath)?.uriString } ?: return@forEach
+                updateMovedMedium(uriString, moved)
+                mediaSynchronizer.registerManualVideoPath(moved.path)
+            }
+            mediaSynchronizer.refresh()
+            movedCount++
+        }
+        return MediaMoveSummary(
+            movedCount = movedCount,
+            failedCount = distinctFolderPaths.size - movedCount,
+        )
+    }
+
     override suspend fun restoreVideosFromRecycleBin(uris: List<String>) {
         if (uris.isEmpty()) return
 
@@ -277,6 +327,33 @@ class LocalMediaRepository @Inject constructor(
                 ),
             )
             mediaSynchronizer.refresh(restored.path)
+        }
+    }
+
+    private suspend fun updateMovedMedium(
+        uriString: String,
+        moved: MediaMoveResult,
+    ) {
+        val medium = mediumDao.get(uriString) ?: return
+        val currentState = mediumStateDao.get(uriString)
+        val movedUriString = moved.uri.toString()
+
+        if (movedUriString != uriString) {
+            mediumDao.delete(listOf(uriString))
+            mediumStateDao.delete(listOf(uriString))
+        }
+
+        mediumDao.upsert(
+            medium.copy(
+                uriString = movedUriString,
+                path = moved.path,
+                parentPath = moved.parentPath,
+                name = moved.fileName,
+            ),
+        )
+
+        currentState?.let { state ->
+            mediumStateDao.upsert(state.copy(uriString = movedUriString))
         }
     }
 

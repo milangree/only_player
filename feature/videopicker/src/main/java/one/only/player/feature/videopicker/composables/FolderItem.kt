@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -105,7 +106,7 @@ private fun FolderListItem(
             } else {
                 ListItemDefaults.colors().supportingContentColor
             },
-            selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+            selectedContainerColor = selectedMediaContainerColor(),
         ),
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
@@ -212,7 +213,7 @@ private fun FolderGridItem(
             } else {
                 ListItemDefaults.colors().supportingContentColor
             },
-            selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+            selectedContainerColor = selectedMediaContainerColor(),
         ),
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
@@ -296,6 +297,13 @@ private fun FolderGridItem(
             }
         },
     )
+}
+
+@Composable
+private fun selectedMediaContainerColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+    Color(0xFFFFFFFF).copy(alpha = 0.20f)
+} else {
+    Color(0xFF212121).copy(alpha = 0.30f)
 }
 
 @PreviewLightDark

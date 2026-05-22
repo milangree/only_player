@@ -441,6 +441,12 @@
     <string name="restore_settings_failed">恢复设置失败</string>
     <string name="move_to_recycle_bin">回收站</string>
     <string name="move_to_recycle_bin_info">所选项目将移至回收站</string>
+    <string name="move">移动</string>
+    <string name="move_here">移动到此处</string>
+    <string name="moving">移动中…</string>
+    <string name="move_success">已移动 %1$d 个项目</string>
+    <string name="move_failed">移动失败</string>
+    <string name="move_partial_success">已移动 %1$d 个，%2$d 个失败</string>
     <string name="restore">恢复</string>
     <string name="delete_permanently">永久删除</string>
     <string name="settings_backup_file_name">onlyplayer-settings.json</string>

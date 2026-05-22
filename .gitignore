@@ -50,6 +50,11 @@ AGENTS.md
 codex/
 codex.*
 
+# Gemini local files
+.gemini/
+.gemini/**
+.gemini*
+
 # Claude local files
 .claude/
 .claude/**

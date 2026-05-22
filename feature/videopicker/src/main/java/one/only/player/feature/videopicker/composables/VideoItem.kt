@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -113,7 +114,7 @@ private fun VideoListItem(
             } else {
                 ListItemDefaults.colors().supportingContentColor
             },
-            selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+            selectedContainerColor = selectedMediaContainerColor(),
         ),
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
@@ -194,7 +195,7 @@ private fun VideoGridItem(
             } else {
                 ListItemDefaults.colors().supportingContentColor
             },
-            selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
+            selectedContainerColor = selectedMediaContainerColor(),
         ),
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
@@ -224,6 +225,13 @@ private fun VideoGridItem(
             }
         },
     )
+}
+
+@Composable
+private fun selectedMediaContainerColor(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+    Color(0xFFFFFFFF).copy(alpha = 0.20f)
+} else {
+    Color(0xFF212121).copy(alpha = 0.30f)
 }
 
 @Composable

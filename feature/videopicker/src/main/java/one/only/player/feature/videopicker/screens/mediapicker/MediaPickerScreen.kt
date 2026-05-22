@@ -4,9 +4,6 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -24,7 +20,6 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -41,6 +36,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,7 +59,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -162,6 +158,7 @@ internal fun MediaPickerScreen(
     val selectionManager = rememberSelectionManager()
     val permissionState = rememberRuntimePermissionState(permission = storagePermission)
     val lazyGridState = rememberLazyGridState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var restoredPlaybackAnchor by rememberSaveable { mutableStateOf<String?>(null) }
     val selectVideoFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -170,6 +167,7 @@ internal fun MediaPickerScreen(
 
     var shouldShowQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var shouldShowMainMenu by rememberSaveable { mutableStateOf(false) }
+    var shouldShowSelectionMenu by rememberSaveable { mutableStateOf(false) }
     var shouldShowUrlDialog by rememberSaveable { mutableStateOf(false) }
 
     var showRenameActionFor: Video? by rememberSaveable { mutableStateOf(null) }
@@ -195,8 +193,27 @@ internal fun MediaPickerScreen(
     val selectedItemsSize = selectionManager.selectedFolders.size + selectionManager.selectedVideos.size
     val totalItemsSize = (uiState.mediaDataState as? DataState.Success)?.value?.run { folderList.size + mediaList.size } ?: 0
     val recentlyPlayedVideo = (uiState.mediaDataState as? DataState.Success)?.value?.recentlyPlayedVideo
+    val isMoveMode = uiState.moveSelection != null
+    val moveResult = uiState.moveResult
+    val moveResultMessage = when {
+        moveResult == null -> null
+        moveResult.movedCount > 0 && moveResult.failedCount > 0 -> stringResource(
+            R.string.move_partial_success,
+            moveResult.movedCount,
+            moveResult.failedCount,
+        )
+        moveResult.movedCount > 0 -> stringResource(R.string.move_success, moveResult.movedCount)
+        else -> stringResource(R.string.move_failed)
+    }
+    val canMoveToCurrentFolder = when {
+        !isMoveMode -> false
+        !isLibraryMode -> false
+        uiState.folderPath == null -> false
+        else -> uiState.moveSelection?.canMoveTo(uiState.folderPath) == true
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             NextTopAppBar(
                 title = (
@@ -245,7 +262,33 @@ internal fun MediaPickerScreen(
                     }
                 },
                 actions = {
-                    if (selectionManager.isInSelectionMode) {
+                    if (isMoveMode) {
+                        TextButton(
+                            onClick = {
+                                uiState.folderPath?.let { folderPath ->
+                                    onEvent(MediaPickerUiEvent.MoveSelectionToFolder(folderPath))
+                                }
+                            },
+                            enabled = canMoveToCurrentFolder && !uiState.isMovingSelection,
+                            modifier = Modifier.testTag("btn_move_here"),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    if (uiState.isMovingSelection) R.string.moving else R.string.move_here,
+                                ),
+                            )
+                        }
+                        FilledTonalIconButton(
+                            onClick = { onEvent(MediaPickerUiEvent.CancelMoveSelection) },
+                            enabled = !uiState.isMovingSelection,
+                            modifier = Modifier.testTag("btn_cancel_move"),
+                        ) {
+                            Icon(
+                                imageVector = NextIcons.Close,
+                                contentDescription = stringResource(id = R.string.cancel),
+                            )
+                        }
+                    } else if (selectionManager.isInSelectionMode) {
                         FilledTonalIconButton(
                             onClick = {
                                 if (selectedItemsSize != totalItemsSize) {
@@ -268,6 +311,78 @@ internal fun MediaPickerScreen(
                                     stringResource(R.string.select_all)
                                 } else {
                                     stringResource(R.string.deselect_all)
+                                },
+                            )
+                        }
+                        Box {
+                            FilledTonalIconButton(
+                                onClick = { shouldShowSelectionMenu = true },
+                                modifier = Modifier.testTag("btn_selection_actions"),
+                            ) {
+                                Icon(
+                                    imageVector = NextIcons.Menu,
+                                    contentDescription = stringResource(id = R.string.menu),
+                                )
+                            }
+                            SelectionActionsMenu(
+                                expanded = shouldShowSelectionMenu,
+                                onDismissRequest = { shouldShowSelectionMenu = false },
+                                deleteAction = deleteAction,
+                                shouldShowRestoreAction = isRecycleBinMode,
+                                shouldShowMoveAction = isLibraryMode,
+                                shouldShowRenameAction = selectionManager.isSingleVideoSelected && isLibraryMode,
+                                shouldShowInfoAction = selectionManager.isSingleVideoSelected,
+                                shouldShowExcludeAction = selectionManager.selectedFolders.isNotEmpty() && isLibraryMode,
+                                onRenameAction = {
+                                    shouldShowSelectionMenu = false
+                                    val selectedVideo = selectionManager.selectedVideos.firstOrNull() ?: return@SelectionActionsMenu
+                                    val video = (uiState.mediaDataState as? DataState.Success)?.value?.mediaList
+                                        ?.find { it.uriString == selectedVideo.uriString } ?: return@SelectionActionsMenu
+                                    showRenameActionFor = video
+                                },
+                                onInfoAction = {
+                                    shouldShowSelectionMenu = false
+                                    val selectedVideo = selectionManager.selectedVideos.firstOrNull() ?: return@SelectionActionsMenu
+                                    val video = (uiState.mediaDataState as? DataState.Success)?.value?.mediaList
+                                        ?.find { it.uriString == selectedVideo.uriString } ?: return@SelectionActionsMenu
+                                    showInfoActionFor = video
+                                    selectionManager.clearSelection()
+                                },
+                                onMoveAction = {
+                                    shouldShowSelectionMenu = false
+                                    onEvent(
+                                        MediaPickerUiEvent.StartMoveSelection(
+                                            videoUris = selectionManager.selectedVideos.map { it.uriString },
+                                            folderPaths = selectionManager.selectedFolders.map { it.path },
+                                        ),
+                                    )
+                                    selectionManager.exitSelectionMode()
+                                },
+                                onShareAction = {
+                                    shouldShowSelectionMenu = false
+                                    onEvent(MediaPickerUiEvent.ShareVideos(selectionManager.allSelectedVideos.map { it.uriString }))
+                                },
+                                onRestoreAction = {
+                                    shouldShowSelectionMenu = false
+                                    onEvent(MediaPickerUiEvent.RestoreVideos(selectionManager.allSelectedVideos.map { it.uriString }))
+                                    selectionManager.clearSelection()
+                                },
+                                onDeleteAction = {
+                                    shouldShowSelectionMenu = false
+                                    val allUris = selectionManager.allSelectedVideos.map { it.uriString }
+                                    val hasLocalFileUri = allUris.any { it.startsWith("file:") }
+                                    if (deleteAction == MediaPickerDeleteAction.PermanentlyDelete && !hasLocalFileUri) {
+                                        onEvent(MediaPickerUiEvent.PermanentlyDeleteVideos(allUris))
+                                        selectionManager.exitSelectionMode()
+                                    } else {
+                                        shouldShowDeleteVideosConfirmation = true
+                                    }
+                                },
+                                onExcludeAction = {
+                                    shouldShowSelectionMenu = false
+                                    val paths = selectionManager.selectedFolders.map { it.path }
+                                    onEvent(MediaPickerUiEvent.ExcludeFolders(paths))
+                                    selectionManager.exitSelectionMode()
                                 },
                             )
                         }
@@ -392,52 +507,6 @@ internal fun MediaPickerScreen(
                 },
             )
         },
-        bottomBar = {
-            SelectionActionsSheet(
-                shouldShowSelectionActionsSheet = selectionManager.isInSelectionMode &&
-                    (selectionManager.allSelectedVideos.isNotEmpty() || selectionManager.selectedFolders.isNotEmpty()),
-                deleteAction = deleteAction,
-                shouldShowRestoreAction = isRecycleBinMode,
-                shouldShowRenameAction = selectionManager.isSingleVideoSelected && isLibraryMode,
-                shouldShowInfoAction = selectionManager.isSingleVideoSelected,
-                shouldShowExcludeAction = selectionManager.selectedFolders.isNotEmpty() && isLibraryMode,
-                onRenameAction = {
-                    val selectedVideo = selectionManager.selectedVideos.firstOrNull() ?: return@SelectionActionsSheet
-                    val video = (uiState.mediaDataState as? DataState.Success)?.value?.mediaList
-                        ?.find { it.uriString == selectedVideo.uriString } ?: return@SelectionActionsSheet
-                    showRenameActionFor = video
-                },
-                onInfoAction = {
-                    val selectedVideo = selectionManager.selectedVideos.firstOrNull() ?: return@SelectionActionsSheet
-                    val video = (uiState.mediaDataState as? DataState.Success)?.value?.mediaList
-                        ?.find { it.uriString == selectedVideo.uriString } ?: return@SelectionActionsSheet
-                    showInfoActionFor = video
-                    selectionManager.clearSelection()
-                },
-                onShareAction = {
-                    onEvent(MediaPickerUiEvent.ShareVideos(selectionManager.allSelectedVideos.map { it.uriString }))
-                },
-                onRestoreAction = {
-                    onEvent(MediaPickerUiEvent.RestoreVideos(selectionManager.allSelectedVideos.map { it.uriString }))
-                    selectionManager.clearSelection()
-                },
-                onDeleteAction = {
-                    val allUris = selectionManager.allSelectedVideos.map { it.uriString }
-                    val hasLocalFileUri = allUris.any { it.startsWith("file:") }
-                    if (deleteAction == MediaPickerDeleteAction.PermanentlyDelete && !hasLocalFileUri) {
-                        onEvent(MediaPickerUiEvent.PermanentlyDeleteVideos(allUris))
-                        selectionManager.exitSelectionMode()
-                    } else {
-                        shouldShowDeleteVideosConfirmation = true
-                    }
-                },
-                onExcludeAction = {
-                    val paths = selectionManager.selectedFolders.map { it.path }
-                    onEvent(MediaPickerUiEvent.ExcludeFolders(paths))
-                    selectionManager.exitSelectionMode()
-                },
-            )
-        },
         contentWindowInsets = WindowInsets.displayCutout,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) { scaffoldPadding ->
@@ -495,7 +564,9 @@ internal fun MediaPickerScreen(
                                             onEvent(MediaPickerUiEvent.CacheFolderSnapshot(it))
                                             onFolderClick(it.path, uiState.screenMode)
                                         },
-                                        onVideoClick = { onPlayVideo(it) },
+                                        onVideoClick = { videoUri ->
+                                            if (!isMoveMode) onPlayVideo(videoUri)
+                                        },
                                         selectionManager = selectionManager,
                                         lazyGridState = lazyGridState,
                                         contentPadding = updatedScaffoldPadding,
@@ -508,6 +579,12 @@ internal fun MediaPickerScreen(
                 }
             }
         }
+    }
+
+    LaunchedEffect(moveResultMessage) {
+        val message = moveResultMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        onEvent(MediaPickerUiEvent.ClearMoveResult)
     }
 
     LaunchedEffect(uiState.folderPath) {
@@ -542,9 +619,11 @@ internal fun MediaPickerScreen(
         restoredPlaybackAnchor = restoreToken
     }
 
-    LaunchedEffect(selectionManager.isInSelectionMode) {
-        if (selectionManager.isInSelectionMode) {
+    LaunchedEffect(selectionManager.isInSelectionMode, isMoveMode) {
+        if (selectionManager.isInSelectionMode || isMoveMode) {
             shouldShowMainMenu = false
+        } else {
+            shouldShowSelectionMenu = false
         }
     }
 
@@ -755,138 +834,98 @@ private enum class MediaPickerDeleteAction {
 }
 
 @Composable
-private fun SelectionActionsSheet(
-    shouldShowSelectionActionsSheet: Boolean,
+private fun SelectionActionsMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
     deleteAction: MediaPickerDeleteAction,
     shouldShowRestoreAction: Boolean,
+    shouldShowMoveAction: Boolean,
     shouldShowRenameAction: Boolean,
     shouldShowInfoAction: Boolean,
     shouldShowExcludeAction: Boolean,
     onRestoreAction: () -> Unit,
     onRenameAction: () -> Unit,
     onInfoAction: () -> Unit,
+    onMoveAction: () -> Unit,
     onShareAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onExcludeAction: () -> Unit,
 ) {
-    // 退出动画期间冻结按钮可见性，避免按钮先于操作栏消失
-    val frozenShowRestore = rememberUpdatedStateWhenVisible(shouldShowSelectionActionsSheet, shouldShowRestoreAction)
-    val frozenShowRename = rememberUpdatedStateWhenVisible(shouldShowSelectionActionsSheet, shouldShowRenameAction)
-    val frozenShowInfo = rememberUpdatedStateWhenVisible(shouldShowSelectionActionsSheet, shouldShowInfoAction)
-    val frozenShowExclude = rememberUpdatedStateWhenVisible(shouldShowSelectionActionsSheet, shouldShowExcludeAction)
-
-    AnimatedVisibility(
-        visible = shouldShowSelectionActionsSheet,
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.testTag("menu_selection_actions"),
+        shape = RoundedCornerShape(10.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+        ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 40.dp)
-                .padding(top = 6.dp, bottom = 24.dp),
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(999.dp),
-                shadowElevation = 2.dp,
-                tonalElevation = 0.dp,
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f),
-                ),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (frozenShowRestore) {
-                        SelectionActionItem(
-                            imageVector = NextIcons.ArrowUpward,
-                            text = stringResource(id = R.string.restore),
-                            onClick = onRestoreAction,
-                        )
-                    }
-                    if (frozenShowRename) {
-                        SelectionActionItem(
-                            imageVector = NextIcons.Edit,
-                            text = stringResource(id = R.string.rename),
-                            onClick = onRenameAction,
-                        )
-                    }
-                    if (frozenShowInfo) {
-                        SelectionActionItem(
-                            imageVector = NextIcons.Info,
-                            text = stringResource(id = R.string.info),
-                            onClick = onInfoAction,
-                        )
-                    }
-                    SelectionActionItem(
-                        imageVector = NextIcons.Share,
-                        text = stringResource(id = R.string.share),
-                        onClick = onShareAction,
-                    )
-                    if (frozenShowExclude) {
-                        SelectionActionItem(
-                            imageVector = NextIcons.FolderOff,
-                            text = stringResource(id = R.string.exclude),
-                            onClick = onExcludeAction,
-                        )
-                    }
-                    SelectionActionItem(
-                        imageVector = NextIcons.Delete,
-                        text = stringResource(
-                            id = when (deleteAction) {
-                                MediaPickerDeleteAction.MoveToRecycleBin -> R.string.move_to_recycle_bin
-                                MediaPickerDeleteAction.PermanentlyDelete -> {
-                                    if (frozenShowRestore) {
-                                        R.string.delete_permanently
-                                    } else {
-                                        R.string.delete
-                                    }
-                                }
-                            },
-                        ),
-                        onClick = onDeleteAction,
-                    )
-                }
-            }
+        if (shouldShowRestoreAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.restore),
+                icon = NextIcons.ArrowUpward,
+                testTag = "item_selection_restore",
+                onClick = onRestoreAction,
+            )
         }
-    }
-}
-
-@Composable
-private fun RowScope.SelectionActionItem(
-    imageVector: ImageVector,
-    text: String,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = text,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(18.dp),
+        if (shouldShowMoveAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.move),
+                icon = NextIcons.Folder,
+                testTag = "item_selection_move",
+                onClick = onMoveAction,
+            )
+        }
+        if (shouldShowRenameAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.rename),
+                icon = NextIcons.Edit,
+                testTag = "item_selection_rename",
+                onClick = onRenameAction,
+            )
+        }
+        if (shouldShowInfoAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.info),
+                icon = NextIcons.Info,
+                testTag = "item_selection_info",
+                onClick = onInfoAction,
+            )
+        }
+        MainMenuItem(
+            text = stringResource(id = R.string.share),
+            icon = NextIcons.Share,
+            testTag = "item_selection_share",
+            onClick = onShareAction,
         )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
+        if (shouldShowExcludeAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.exclude),
+                icon = NextIcons.FolderOff,
+                testTag = "item_selection_exclude",
+                onClick = onExcludeAction,
+            )
+        }
+        MainMenuItem(
+            text = stringResource(
+                id = when (deleteAction) {
+                    MediaPickerDeleteAction.MoveToRecycleBin -> R.string.move_to_recycle_bin
+                    MediaPickerDeleteAction.PermanentlyDelete -> {
+                        if (shouldShowRestoreAction) {
+                            R.string.delete_permanently
+                        } else {
+                            R.string.delete
+                        }
+                    }
+                },
+            ),
+            icon = NextIcons.Delete,
+            testTag = "item_selection_delete",
+            onClick = onDeleteAction,
         )
     }
 }
@@ -998,12 +1037,4 @@ private fun MediaPickerLoadingPreview() {
             )
         }
     }
-}
-
-// 仅在 visible=true 时跟踪 value，退出动画期间保持最后值
-@Composable
-private fun rememberUpdatedStateWhenVisible(isVisible: Boolean, value: Boolean): Boolean {
-    var frozen by remember { mutableStateOf(value) }
-    if (isVisible) frozen = value
-    return frozen
 }
