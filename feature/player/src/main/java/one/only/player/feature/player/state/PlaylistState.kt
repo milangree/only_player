@@ -35,8 +35,6 @@ class PlaylistState(
         player.listen { events ->
             if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_TIMELINE_CHANGED)) {
                 updatePlaylist()
-            }
-            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
                 updateCurrentIndex()
             }
         }
@@ -53,8 +51,12 @@ class PlaylistState(
 
     fun removeItem(index: Int) {
         if (index !in playlist.indices) return
-        if (playlist.size <= 1) return // 不允许删除最后一项
+        if (playlist.size <= 1) return
 
+        if (index == currentMediaItemIndex) {
+            val nextIndex = if (index < playlist.lastIndex) index + 1 else index - 1
+            player.seekToDefaultPosition(nextIndex)
+        }
         player.removeMediaItem(index)
         updatePlaylist()
         updateCurrentIndex()

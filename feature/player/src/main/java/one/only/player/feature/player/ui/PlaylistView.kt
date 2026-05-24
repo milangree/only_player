@@ -86,6 +86,7 @@ fun PlaylistContent(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val playlistState = rememberPlaylistState(player)
+    val playlistEntries = playlistState.playlist.toPlaylistEntries()
     val lazyListState = rememberLazyListState()
     val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
         playlistState.moveItem(from.index, to.index)
@@ -101,7 +102,7 @@ fun PlaylistContent(
         }
     }
 
-    if (playlistState.playlist.isEmpty()) {
+    if (playlistEntries.isEmpty()) {
         EmptyPlaylistView()
     } else {
         LazyColumn(
@@ -111,26 +112,44 @@ fun PlaylistContent(
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             itemsIndexed(
-                items = playlistState.playlist,
-                key = { _, item -> item.mediaId },
-            ) { index, mediaItem ->
+                items = playlistEntries,
+                key = { _, item -> item.key },
+            ) { index, entry ->
                 ReorderableItem(
                     state = reorderableLazyListState,
-                    key = mediaItem.mediaId,
+                    key = entry.key,
                 ) {
                     val isCurrentItem = index == playlistState.currentMediaItemIndex
                     PlaylistItemView(
-                        mediaItem = mediaItem,
+                        mediaItem = entry.mediaItem,
                         isFirstItem = index == 0,
-                        isLastItem = index == playlistState.playlist.lastIndex,
+                        isLastItem = index == playlistEntries.lastIndex,
                         isCurrentItem = isCurrentItem,
-                        canDelete = playlistState.playlist.size > 1,
+                        canDelete = playlistEntries.size > 1,
                         onClick = { playlistState.seekToItem(index) },
                         onDelete = { playlistState.removeItem(index) },
                     )
                 }
             }
         }
+    }
+}
+
+private data class PlaylistEntry(
+    val key: String,
+    val mediaItem: MediaItem,
+)
+
+private fun List<MediaItem>.toPlaylistEntries(): List<PlaylistEntry> {
+    val mediaIdOccurrences = mutableMapOf<String, Int>()
+    return map { mediaItem ->
+        val mediaId = mediaItem.mediaId
+        val occurrence = mediaIdOccurrences.getOrDefault(mediaId, 0)
+        mediaIdOccurrences[mediaId] = occurrence + 1
+        PlaylistEntry(
+            key = "$mediaId#$occurrence",
+            mediaItem = mediaItem,
+        )
     }
 }
 
