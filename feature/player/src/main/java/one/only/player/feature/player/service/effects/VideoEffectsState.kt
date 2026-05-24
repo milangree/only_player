@@ -1,4 +1,4 @@
-package one.only.player.feature.player.service
+package one.only.player.feature.player.service.effects
 
 import one.only.player.core.model.DecoderPriority
 

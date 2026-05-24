@@ -1,4 +1,4 @@
-package one.only.player.feature.player.service
+package one.only.player.feature.player.service.decoder
 
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import one.only.player.core.model.DecoderPriority

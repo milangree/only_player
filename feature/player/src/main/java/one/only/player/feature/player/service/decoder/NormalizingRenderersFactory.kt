@@ -1,4 +1,4 @@
-package one.only.player.feature.player.service
+package one.only.player.feature.player.service.decoder
 
 import android.content.Context
 import android.os.Handler

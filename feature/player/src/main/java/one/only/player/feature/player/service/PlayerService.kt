@@ -3,19 +3,14 @@ package one.only.player.feature.player.service
 import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Intent
-import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Bundle
-import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.annotation.OptIn
-import androidx.core.net.toFile
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.Effect
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -61,9 +56,6 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import coil3.ImageLoader
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.toBitmap
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
@@ -72,18 +64,10 @@ import io.github.peerless2012.ass.media.AssHandler
 import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
-import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import java.io.File
 import java.io.InputStream
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -98,9 +82,7 @@ import okhttp3.OkHttpClient
 import one.only.player.core.common.Logger
 import one.only.player.core.common.extensions.deleteFiles
 import one.only.player.core.common.extensions.getFilenameFromUri
-import one.only.player.core.common.extensions.getLocalSubtitles
 import one.only.player.core.common.extensions.getPath
-import one.only.player.core.common.extensions.matchesSubtitleBase
 import one.only.player.core.common.extensions.subtitleCacheDir
 import one.only.player.core.data.remote.FtpClient
 import one.only.player.core.data.remote.SmbClient
@@ -114,23 +96,16 @@ import one.only.player.core.data.repository.isRemotePlaybackStateKey
 import one.only.player.core.model.DecoderPriority
 import one.only.player.core.model.LoopMode
 import one.only.player.core.model.PlayerPreferences
-import one.only.player.core.model.RemoteFile
-import one.only.player.core.model.RemoteServer
 import one.only.player.core.model.Resume
-import one.only.player.core.model.ServerProtocol
 import one.only.player.core.ui.R as coreUiR
 import one.only.player.feature.player.PlayerActivity
-import one.only.player.feature.player.R
 import one.only.player.feature.player.datasource.FtpDataSource
 import one.only.player.feature.player.datasource.SmbDataSource
-import one.only.player.feature.player.engine.media3.MkvCuesParser
 import one.only.player.feature.player.engine.media3.SeekMapInjectingExtractor
-import one.only.player.feature.player.engine.media3.buildSeekMapFromCues
 import one.only.player.feature.player.extensions.addAdditionalSubtitleConfiguration
 import one.only.player.feature.player.extensions.audioTrackIndex
 import one.only.player.feature.player.extensions.copy
 import one.only.player.feature.player.extensions.getManuallySelectedTrackIndex
-import one.only.player.feature.player.extensions.getSubtitleMime
 import one.only.player.feature.player.extensions.isApproximateSeekEnabled
 import one.only.player.feature.player.extensions.isVideoEffectsAvailable
 import one.only.player.feature.player.extensions.localParentPath
@@ -148,6 +123,21 @@ import one.only.player.feature.player.extensions.subtitleTrackIndex
 import one.only.player.feature.player.extensions.switchTrack
 import one.only.player.feature.player.extensions.uriToSubtitleConfiguration
 import one.only.player.feature.player.extensions.videoZoom
+import one.only.player.feature.player.service.artwork.PlaybackArtworkLoader
+import one.only.player.feature.player.service.audio.AudioEffectsCoordinator
+import one.only.player.feature.player.service.decoder.NormalizingRenderersFactory
+import one.only.player.feature.player.service.decoder.extensionRendererMode
+import one.only.player.feature.player.service.decoder.logName
+import one.only.player.feature.player.service.decoder.shouldEnableDecoderFallback
+import one.only.player.feature.player.service.decoder.shouldRetryWithSoftwareDecoder
+import one.only.player.feature.player.service.decoder.shouldUseAudioExtensionFallback
+import one.only.player.feature.player.service.effects.VideoEffectsCoordinator
+import one.only.player.feature.player.service.effects.isHdrVideoFormat
+import one.only.player.feature.player.service.effects.shouldApplyVideoEffects
+import one.only.player.feature.player.service.effects.toVideoFilterPreferences
+import one.only.player.feature.player.service.seek.PreciseSeekCoordinator
+import one.only.player.feature.player.service.subtitle.ExternalSubtitleLoader
+import one.only.player.feature.player.service.subtitle.SubtitleTrackSelector
 import one.only.player.feature.player.subtitle.AssHandlerRegistry
 import one.only.player.feature.player.subtitle.NormalizingAssMatroskaExtractor
 import one.only.player.feature.player.subtitle.OnlineSubtitleRepository
@@ -161,42 +151,7 @@ class PlayerService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlayerService"
-        private const val FAST_SEEK_MIN_DELTA_MS = 2_000L
-        private const val STARTUP_PRECISE_RESUME_THRESHOLD_MS = 10_000L
-        private const val MKV_CUES_CACHE_MAGIC = 0x4E505145
-        private val DIRECT_SUBTITLE_URI_SCHEMES = setOf("smb", "ftp")
         private val REMOTE_SOURCE_URI_SCHEMES = setOf("smb", "ftp")
-
-        private val ISO_639_2T_TO_1 = mapOf(
-            "zho" to "zh", "chi" to "zh",
-            "eng" to "en",
-            "jpn" to "ja",
-            "kor" to "ko",
-            "fra" to "fr", "fre" to "fr",
-            "deu" to "de", "ger" to "de",
-            "spa" to "es",
-            "por" to "pt",
-            "rus" to "ru",
-            "ara" to "ar",
-            "tha" to "th",
-            "vie" to "vi",
-            "ita" to "it",
-            "pol" to "pl",
-            "nld" to "nl", "dut" to "nl",
-            "tur" to "tr",
-            "ind" to "id",
-            "msa" to "ms", "may" to "ms",
-        )
-        private val REMOTE_SUBTITLE_EXTENSIONS = setOf(
-            "ass",
-            "srt",
-            "ssa",
-            "ttml",
-            "vtt",
-        )
-        private const val VIDEO_FILTER_PREVIEW_DELAY_MS = 40L
-        private const val VIDEO_FILTER_TRANSITION_DURATION_MS = 160L
-        private const val PAUSED_FRAME_REFRESH_OFFSET_MS = 50L
     }
 
     @Inject
@@ -222,6 +177,15 @@ class PlayerService : MediaSessionService() {
 
     private val playerPreferences: PlayerPreferences
         get() = preferencesRepository.playerPreferences.value
+
+    private val artworkLoader by lazy {
+        PlaybackArtworkLoader(
+            context = applicationContext,
+            imageLoader = imageLoader,
+            scope = serviceScope,
+            findMediaItem = ::findMediaItemInSession,
+        )
+    }
 
     private fun updateFolderPlaybackAnchor(mediaItem: MediaItem) {
         val preferences = preferencesRepository.applicationPreferences.value
@@ -265,41 +229,50 @@ class PlayerService : MediaSessionService() {
 
     private var isMediaItemReady = false
 
-    private val volumeNormalizationAudioProcessor = VolumeNormalizationAudioProcessor()
-    private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var requestedVolumeGain: Int = 0
+    private val audioEffectsCoordinator = AudioEffectsCoordinator()
+    private val videoEffectsCoordinator = VideoEffectsCoordinator(
+        scope = serviceScope,
+        currentPreferencesProvider = ::playerPreferences,
+        currentPlayerProvider = { mediaSession?.player as? ExoPlayer },
+    )
+    private val subtitleTrackSelector = SubtitleTrackSelector { playerPreferences.preferredSubtitleLanguage }
+    private val externalSubtitleLoader by lazy {
+        ExternalSubtitleLoader(
+            context = applicationContext,
+            mediaRepository = mediaRepository,
+            webDavClient = webDavClient,
+            smbClient = smbClient,
+            ftpClient = ftpClient,
+        )
+    }
     private val mediaParserRetried = mutableSetOf<String>()
     private val softwareDecoderRetried = mutableSetOf<String>()
     private var isPendingExternalSubAutoSelect = false
     private var pendingRememberedSubtitleSelection: PendingSubtitleSelection? = null
     private var assHandler: AssHandler? = null
-    private var pendingPreciseSeekPromotionJob: Job? = null
-    private var preciseSeekRequestId = 0L
-    private var pendingStartupPreciseResumeToken: String? = null
-    private var pendingStartupPreciseResumePositionMs: Long? = null
     private var activeDecoderPriority: DecoderPriority = DecoderPriority.AUTOMATIC
-    private var currentVideoEffectsState = VideoEffectsState(
-        filters = VideoFilterPreferences.default(),
-        decoderPriority = DecoderPriority.AUTOMATIC,
-    )
-    private var activeVideoFiltersEffect: VideoFiltersEffect? = null
-    private var currentVideoFormat: Format? = null
-    private var currentVideoDecoderName: String? = null
-    private var isCurrentVideoHdr = false
-    private var hasRenderedFirstFrameForCurrentItem = false
-    private var pendingVideoFiltersJob: Job? = null
-    private var videoFilterTransition = VideoFilterTransition.default()
     private lateinit var fastStartMediaSourceFactory: DefaultMediaSourceFactory
     private lateinit var preciseSeekMediaSourceFactory: DefaultMediaSourceFactory
     private var sessionLoadErrorHandlingPolicy: LoadErrorHandlingPolicy? = null
     private var sessionDrmSessionManagerProvider: DrmSessionManagerProvider? = null
     private lateinit var sessionMediaSourceFactory: MediaSource.Factory
     private lateinit var assSubtitleParserFactory: AssSubtitleParserFactory
-
-    // mediaId 对应预解析 IndexSeekMap
-    private val mkvSeekMapCache = ConcurrentHashMap<String, androidx.media3.extractor.SeekMap>()
-    private val mkvCueParseJobs = ConcurrentHashMap<String, Deferred<androidx.media3.extractor.SeekMap?>>()
-    private val preciseSeekMediaIds = ConcurrentHashMap.newKeySet<String>()
+    private val preciseSeekCoordinator by lazy {
+        PreciseSeekCoordinator(
+            context = applicationContext,
+            scope = serviceScope,
+            currentPlayerProvider = { mediaSession?.player as? ExoPlayer },
+            createMediaSource = ::createMediaSource,
+            resolvePlaybackStateUri = { mediaItem -> mediaItem.resolvePlaybackStateUri() },
+            updatePlaybackPosition = { uri, position ->
+                mediaRepository.updateMediumPosition(
+                    uri = uri,
+                    position = position,
+                )
+            },
+            mediaLogSummary = { mediaId -> mediaId.toPrivateMediaLogSummary() },
+        )
+    }
 
     private var startupTimestamp = 0L
     private val startupAnalyticsListener = object : AnalyticsListener {
@@ -354,7 +327,7 @@ class PlayerService : MediaSessionService() {
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
-            currentVideoDecoderName = decoderName
+            videoEffectsCoordinator.setDecoderName(decoderName)
             Logger.info(TAG, "startup decoderInit=$decoderName dur=${initializationDurationMs}ms t=${elapsed()}ms")
         }
 
@@ -363,13 +336,11 @@ class PlayerService : MediaSessionService() {
             format: Format,
             decoderReuseEvaluation: DecoderReuseEvaluation?,
         ) {
-            val wasVideoHdr = isCurrentVideoHdr
-            currentVideoFormat = format
-            isCurrentVideoHdr = format.isHdrVideoFormat()
+            videoEffectsCoordinator.onVideoInputFormatChanged(
+                player = mediaSession?.player as? ExoPlayer,
+                format = format,
+            )
             Logger.info(TAG, "startup videoFormat transfer=${format.colorInfo?.colorTransfer} standard=${format.colorInfo?.colorSpace} range=${format.colorInfo?.colorRange}")
-            if (wasVideoHdr != isCurrentVideoHdr || activeVideoFiltersEffect != null) {
-                (mediaSession?.player as? ExoPlayer)?.let { applyVideoFilters(it, playerPreferences, force = true) }
-            }
         }
 
         override fun onAudioDecoderInitialized(
@@ -417,19 +388,11 @@ class PlayerService : MediaSessionService() {
                 handleRepeatedPlayback(mediaSession?.player ?: return)
                 return
             }
-            currentVideoFormat = null
-            currentVideoDecoderName = null
-            isCurrentVideoHdr = false
-            hasRenderedFirstFrameForCurrentItem = false
-            pendingPreciseSeekPromotionJob?.cancel()
-            pendingPreciseSeekPromotionJob = null
-            preciseSeekRequestId++
-            pendingStartupPreciseResumeToken = null
-            pendingStartupPreciseResumePositionMs = null
+            videoEffectsCoordinator.resetForMediaItem(mediaSession?.player as? ExoPlayer)
+            preciseSeekCoordinator.resetForMediaItem()
             isMediaItemReady = false
             isPendingExternalSubAutoSelect = false
             pendingRememberedSubtitleSelection = null
-            updateCurrentVideoEffectsAvailability(mediaSession?.player as? ExoPlayer ?: return)
             if (mediaItem != null) {
                 serviceScope.launch {
                     val playbackStateUri = mediaItem.resolvePlaybackStateUri()
@@ -453,23 +416,22 @@ class PlayerService : MediaSessionService() {
 
                 val resumePositionMs = metadata.positionMs?.takeIf { playerPreferences.resume == Resume.YES }
                 if (metadata.isApproximateSeekEnabled) {
-                    val restoredSeekMap = restoreCachedMkvSeekMap(mediaItem)
-                    if (restoredSeekMap != null) {
-                        mkvSeekMapCache[mediaItem.mediaId] = restoredSeekMap
-                    }
-                    scheduleMkvCueCache(mediaItem)
+                    val restoredSeekMap = preciseSeekCoordinator.restoreCachedSeekMapForStartup(mediaItem)
+                    preciseSeekCoordinator.scheduleCueCache(mediaItem)
 
                     if (restoredSeekMap != null) {
-                        preciseSeekMediaIds.add(mediaItem.mediaId)
-                        resumePositionMs?.takeIf { it >= STARTUP_PRECISE_RESUME_THRESHOLD_MS }?.let {
+                        preciseSeekCoordinator.markPrecise(mediaItem.mediaId)
+                        resumePositionMs?.takeIf(preciseSeekCoordinator::shouldUsePreciseStartupResume)?.let {
                             Logger.info(TAG, "Resume cached precise-seek media item=${mediaItem.mediaId} position=$it")
                             mediaSession?.player?.seekTo(it)
                         }
                     } else {
                         resumePositionMs?.takeIf { it > 0L }?.let {
                             Logger.info(TAG, "Resume deferred precise-seek media item=${mediaItem.mediaId} position=$it")
-                            pendingStartupPreciseResumeToken = mediaItem.mediaId
-                            pendingStartupPreciseResumePositionMs = it
+                            preciseSeekCoordinator.deferStartupResume(
+                                mediaId = mediaItem.mediaId,
+                                positionMs = it,
+                            )
                         }
                     }
                     return
@@ -551,12 +513,13 @@ class PlayerService : MediaSessionService() {
                     pendingRememberedSubtitleSelection = null
                     return
                 }
-                val textTracks = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+                val textTracks = subtitleTrackSelector.supportedTextTracks(tracks)
                 if (textTracks.isEmpty()) return
                 if (pendingSelection.subtitleTrackIndex !in textTracks.indices && !pendingSelection.canFallbackToBest) return
 
                 pendingRememberedSubtitleSelection = null
-                player.switchToRememberedOrBestSubtitleTrack(
+                subtitleTrackSelector.switchToRememberedOrBestSubtitleTrack(
+                    player = player,
                     textTracks = textTracks,
                     rememberedSubtitleTrackIndex = pendingSelection.subtitleTrackIndex,
                     shouldFallbackToBest = pendingSelection.canFallbackToBest,
@@ -578,13 +541,14 @@ class PlayerService : MediaSessionService() {
                 return
             }
 
-            val textTracks = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+            val textTracks = subtitleTrackSelector.supportedTextTracks(tracks)
             // 与内置字幕并存：同目录外部字幕（如 ass）仍需扫描合并
             val currentMediaItem = player.currentMediaItem ?: return
             val rememberedSubtitleTrackIndex = metadata.subtitleTrackIndex.takeIf { playerPreferences.shouldRememberSubtitleTrack }
             val shouldWaitForExternalSubtitles = rememberedSubtitleTrackIndex != null && rememberedSubtitleTrackIndex >= textTracks.size
             if (textTracks.isNotEmpty() && !shouldWaitForExternalSubtitles) {
-                player.switchToRememberedOrBestSubtitleTrack(
+                subtitleTrackSelector.switchToRememberedOrBestSubtitleTrack(
+                    player = player,
                     textTracks = textTracks,
                     rememberedSubtitleTrackIndex = rememberedSubtitleTrackIndex,
                     shouldFallbackToBest = true,
@@ -607,12 +571,13 @@ class PlayerService : MediaSessionService() {
                     if (currentPlayer.currentMediaItem?.mediaId != currentMediaItem.mediaId) return@loadExternalSubtitlesForCurrentItem
 
                     val pendingSelection = pendingRememberedSubtitleSelection ?: return@loadExternalSubtitlesForCurrentItem
-                    val currentTextTracks = currentPlayer.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+                    val currentTextTracks = subtitleTrackSelector.supportedTextTracks(currentPlayer.currentTracks)
                     if (currentTextTracks.isEmpty()) return@loadExternalSubtitlesForCurrentItem
                     if (pendingSelection.subtitleTrackIndex in currentTextTracks.indices) return@loadExternalSubtitlesForCurrentItem
 
                     pendingRememberedSubtitleSelection = null
-                    currentPlayer.switchToRememberedOrBestSubtitleTrack(
+                    subtitleTrackSelector.switchToRememberedOrBestSubtitleTrack(
+                        player = currentPlayer,
                         textTracks = currentTextTracks,
                         rememberedSubtitleTrackIndex = pendingSelection.subtitleTrackIndex,
                         shouldFallbackToBest = true,
@@ -708,15 +673,15 @@ class PlayerService : MediaSessionService() {
             val trackFormat = player.currentTracks.groups
                 .firstOrNull { it.type == C.TRACK_TYPE_VIDEO }
                 ?.getTrackFormat(0)
-            val format = currentVideoFormat ?: trackFormat
+            val format = videoEffectsCoordinator.currentFormat ?: trackFormat
             val width = format?.width ?: 0
             val height = format?.height ?: 0
             val rotation = format?.rotationDegrees ?: 0
             val transfer = format?.colorInfo?.colorTransfer
-            isCurrentVideoHdr = format?.isHdrVideoFormat() == true
+            val isVideoHdr = format?.isHdrVideoFormat() == true
             Logger.info(
                 TAG,
-                "startup firstFrameReady format=${width}x$height rot=$rotation duration=${player.duration} seekable=${player.isCurrentMediaItemSeekable} transfer=$transfer hdr=$isCurrentVideoHdr",
+                "startup firstFrameReady format=${width}x$height rot=$rotation duration=${player.duration} seekable=${player.isCurrentMediaItemSeekable} transfer=$transfer hdr=$isVideoHdr",
             )
 
             val duration = player.duration.takeIf { it != C.TIME_UNSET }
@@ -734,10 +699,14 @@ class PlayerService : MediaSessionService() {
                 player.currentMediaItemIndex,
                 updatedMediaItem,
             )
-            continueDeferredStartupPreciseResume(updatedMediaItem)
-            hasRenderedFirstFrameForCurrentItem = true
-            // HDR 状态由首帧确定，强制重评 effects 决策以同步 pipeline
-            (player as? ExoPlayer)?.let { applyVideoFilters(it, playerPreferences, force = true) }
+            preciseSeekCoordinator.continueDeferredStartupResume(updatedMediaItem)
+            (player as? ExoPlayer)?.let {
+                videoEffectsCoordinator.markFirstFrameRendered(
+                    player = it,
+                    format = format,
+                    preferences = playerPreferences,
+                )
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -773,10 +742,13 @@ class PlayerService : MediaSessionService() {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             super.onAudioSessionIdChanged(audioSessionId)
             if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) {
-                releaseLoudnessEnhancer()
+                audioEffectsCoordinator.releaseLoudnessEnhancer()
                 return
             }
-            initializeLoudnessEnhancer(audioSessionId)
+            audioEffectsCoordinator.initializeLoudnessEnhancer(
+                audioSessionId = audioSessionId,
+                preferences = playerPreferences,
+            )
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -826,7 +798,7 @@ class PlayerService : MediaSessionService() {
         )
         retryPlayer.playWhenReady = shouldPlayWhenReady
 
-        releaseLoudnessEnhancer()
+        audioEffectsCoordinator.releaseLoudnessEnhancer()
         failedPlayer.removeListener(playbackStateListener)
         failedPlayer.removeAnalyticsListener(startupAnalyticsListener)
         session.player = retryPlayer
@@ -834,7 +806,7 @@ class PlayerService : MediaSessionService() {
         failedPlayer.clearMediaItems()
         failedPlayer.stop()
         failedPlayer.release()
-        updateCurrentVideoEffectsAvailability(retryPlayer)
+        videoEffectsCoordinator.updateAvailability(retryPlayer)
         return true
     }
 
@@ -870,7 +842,7 @@ class PlayerService : MediaSessionService() {
                 decoderPriority = decoderPriority,
                 assHandler = assHandler ?: return,
             )
-            releaseLoudnessEnhancer()
+            audioEffectsCoordinator.releaseLoudnessEnhancer()
             currentPlayer.removeListener(playbackStateListener)
             currentPlayer.removeAnalyticsListener(startupAnalyticsListener)
             session.player = nextPlayer
@@ -912,7 +884,7 @@ class PlayerService : MediaSessionService() {
         )
         nextPlayer.playWhenReady = shouldPlayWhenReady
 
-        releaseLoudnessEnhancer()
+        audioEffectsCoordinator.releaseLoudnessEnhancer()
         currentPlayer.removeListener(playbackStateListener)
         currentPlayer.removeAnalyticsListener(startupAnalyticsListener)
         session.player = nextPlayer
@@ -920,7 +892,7 @@ class PlayerService : MediaSessionService() {
         currentPlayer.clearMediaItems()
         currentPlayer.stop()
         currentPlayer.release()
-        updateCurrentVideoEffectsAvailability(nextPlayer)
+        videoEffectsCoordinator.updateAvailability(nextPlayer)
     }
 
     private fun isHardwareVideoDecoderError(error: PlaybackException): Boolean {
@@ -1218,263 +1190,12 @@ class PlayerService : MediaSessionService() {
         override fun release() = delegate.release()
     }
 
-    private fun setEnhancerTargetGain(gain: Int) {
-        requestedVolumeGain = gain.coerceAtLeast(0)
-        if (loudnessEnhancer == null && playerPreferences.isVolumeBoostEnabled) {
-            val audioSessionId = mediaSession?.player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
-            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
-                initializeLoudnessEnhancer(audioSessionId)
-            }
-        }
-        applyLoudnessEnhancerGain()
-    }
-
-    private fun initializeLoudnessEnhancer(audioSessionId: Int) {
-        if (!playerPreferences.isVolumeBoostEnabled) return
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        try {
-            releaseLoudnessEnhancer()
-            loudnessEnhancer = LoudnessEnhancer(audioSessionId)
-            Logger.debug(TAG, "Loudness enhancer initialized: boost=true")
-            applyLoudnessEnhancerGain()
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to initialize loudness enhancer", e)
-            loudnessEnhancer = null
-        }
-    }
-
-    private fun releaseLoudnessEnhancer() {
-        val enhancer = loudnessEnhancer ?: return
-        try {
-            enhancer.enabled = false
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to disable loudness enhancer", e)
-        }
-        try {
-            enhancer.release()
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to release loudness enhancer", e)
-        } finally {
-            loudnessEnhancer = null
-        }
-    }
-
     private fun handleRepeatedPlayback(player: Player) {
         player.currentMediaItem?.mediaMetadata?.let { metadata ->
             player.setPlaybackSpeed(playerPreferences.defaultPlaybackSpeed)
             player.playerSpecificSubtitleDelayMilliseconds = metadata.subtitleDelayMilliseconds ?: 0L
             player.playerSpecificSubtitleSpeed = metadata.subtitleSpeed ?: 1f
         }
-    }
-
-    private fun seekWithinCurrentItem(
-        player: Player,
-        targetPositionMs: Long,
-    ) {
-        val currentItem = player.currentMediaItem ?: return
-        if (currentItem.mediaMetadata.isApproximateSeekEnabled) {
-            val requestId = ++preciseSeekRequestId
-            serviceScope.launch { promoteCurrentItemToPreciseSeek(targetPositionMs, requestId) }
-            return
-        }
-        preciseSeekRequestId++
-        player.seekTo(targetPositionMs)
-    }
-
-    private fun applyVideoFilters(preferences: PlayerPreferences) {
-        val player = mediaSession?.player as? ExoPlayer ?: return
-        applyVideoFilters(player, preferences)
-    }
-
-    private fun applyVideoFilters(
-        player: ExoPlayer,
-        preferences: PlayerPreferences,
-        force: Boolean = false,
-    ) {
-        val videoFilters = preferences.toVideoFilterPreferences()
-        scheduleVideoFilters(
-            player = player,
-            videoFilters = videoFilters,
-            delayMs = 0L,
-            shouldSkipStalePreferences = true,
-            logPrefix = "Apply",
-            force = force,
-        )
-    }
-
-    private fun previewVideoFilters(preferences: PlayerPreferences) {
-        val player = mediaSession?.player as? ExoPlayer ?: return
-        val videoFilters = preferences.toVideoFilterPreferences()
-        scheduleVideoFilters(
-            player = player,
-            videoFilters = videoFilters,
-            delayMs = VIDEO_FILTER_PREVIEW_DELAY_MS,
-            shouldSkipStalePreferences = false,
-            logPrefix = "Preview",
-        )
-    }
-
-    private fun scheduleVideoFilters(
-        player: ExoPlayer,
-        videoFilters: VideoFilterPreferences,
-        delayMs: Long,
-        shouldSkipStalePreferences: Boolean,
-        logPrefix: String,
-        force: Boolean = false,
-    ) {
-        pendingVideoFiltersJob?.cancel()
-        if (!force && currentVideoEffectsState == VideoEffectsState(videoFilters, activeDecoderPriority, isPipelineInitialized = true)) return
-
-        pendingVideoFiltersJob = serviceScope.launch {
-            fun hasStalePreferences() = shouldSkipStalePreferences &&
-                preferencesRepository.playerPreferences.value.toVideoFilterPreferences() != videoFilters
-
-            if (delayMs > 0L) delay(delayMs)
-            if (hasStalePreferences()) return@launch
-
-            val decoderPriority = activeDecoderPriority
-            val transition = videoFilterTransition.to(
-                targetFilters = videoFilters,
-                startMs = SystemClock.elapsedRealtime(),
-                durationMs = VIDEO_FILTER_TRANSITION_DURATION_MS,
-            )
-            if (hasStalePreferences()) return@launch
-
-            applyVideoEffects(player, videoFilters, decoderPriority, transition)
-            Logger.debug(TAG, "$logPrefix video filters: $videoFilters effect=${activeVideoFiltersEffect != null}")
-        }.also { job ->
-            job.invokeOnCompletion {
-                if (pendingVideoFiltersJob == job) pendingVideoFiltersJob = null
-            }
-        }
-    }
-
-    private fun applyVideoEffects(
-        player: ExoPlayer,
-        videoFilters: VideoFilterPreferences,
-        decoderPriority: DecoderPriority,
-        transition: VideoFilterTransition,
-    ) {
-        val effect = activeVideoFiltersEffect
-        val canUpdateActiveEffect = effect != null &&
-            shouldUseVideoFiltersEffect(
-                filters = videoFilters,
-                decoderPriority = decoderPriority,
-            )
-        if (canUpdateActiveEffect) {
-            videoFilterTransition = transition
-            effect.updateTransition(transition)
-            currentVideoEffectsState = VideoEffectsState(
-                filters = videoFilters,
-                decoderPriority = decoderPriority,
-                isPipelineInitialized = true,
-            )
-            refreshPausedVideoFrame(player)
-            updateCurrentVideoEffectsAvailability(player)
-            return
-        }
-
-        val effects = buildVideoEffects(
-            transition = transition,
-            decoderPriority = decoderPriority,
-        )
-        // 首帧前 HDR 状态未定，首次建立 GL pipeline 推迟到 onRenderedFirstFrame 后避免 HDR 误接管
-        if (!hasRenderedFirstFrameForCurrentItem && activeVideoFiltersEffect == null && effects.isNotEmpty()) {
-            Logger.debug(TAG, "Defer setVideoEffects until first frame to resolve HDR state")
-            return
-        }
-        // 无滤镜且 pipeline 未启用时不下发空 effects，避免接管 MediaCodec 直通导致 HDR 视频走 SDR 处理
-        if (effects.isEmpty() && activeVideoFiltersEffect == null) {
-            currentVideoEffectsState = VideoEffectsState(
-                filters = videoFilters,
-                decoderPriority = decoderPriority,
-                isPipelineInitialized = false,
-            )
-            Logger.debug(TAG, "Skip setVideoEffects: no filters and pipeline not initialized")
-            updateCurrentVideoEffectsAvailability(player)
-            return
-        }
-        videoFilterTransition = if (effects.isEmpty()) VideoFilterTransition.default() else transition
-        currentVideoEffectsState = VideoEffectsState(
-            filters = videoFilters,
-            decoderPriority = decoderPriority,
-            isPipelineInitialized = true,
-        )
-        activeVideoFiltersEffect = effects.filterIsInstance<VideoFiltersEffect>().firstOrNull()
-        player.setVideoEffects(effects)
-        refreshPausedVideoFrame(player)
-        updateCurrentVideoEffectsAvailability(player)
-    }
-
-    private fun refreshPausedVideoFrame(player: ExoPlayer) {
-        if (player.playWhenReady) return
-        if (player.playbackState != Player.STATE_READY) return
-        val position = player.currentPosition.takeIf { it != C.TIME_UNSET } ?: return
-        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
-        val targetPosition = duration
-            ?.let { (position + PAUSED_FRAME_REFRESH_OFFSET_MS).coerceAtMost(it) }
-            ?.takeIf { it != position }
-            ?: (position - PAUSED_FRAME_REFRESH_OFFSET_MS).coerceAtLeast(0L)
-        if (targetPosition == position) return
-        player.seekTo(targetPosition)
-        player.seekTo(position)
-    }
-
-    private fun updateCurrentVideoEffectsAvailability(player: ExoPlayer) {
-        val currentMediaItem = player.currentMediaItem ?: return
-        val isVideoEffectsAvailable = shouldApplyVideoEffects(activeDecoderPriority)
-        if (currentMediaItem.mediaMetadata.isVideoEffectsAvailable == isVideoEffectsAvailable) return
-
-        player.replaceMediaItem(
-            player.currentMediaItemIndex,
-            currentMediaItem.copy(isVideoEffectsAvailable = isVideoEffectsAvailable),
-        )
-        Logger.debug(TAG, "Video effects availability: available=$isVideoEffectsAvailable decoder=$activeDecoderPriority")
-    }
-
-    private fun PlayerPreferences.toVideoFilterPreferences(): VideoFilterPreferences {
-        if (!shouldApplyVideoFilters) return VideoFilterPreferences.default()
-
-        val filters = VideoFilterPreferences(
-            shouldApply = true,
-            isBrightnessEnabled = isVideoBrightnessFilterEnabled,
-            brightness = if (isVideoBrightnessFilterEnabled) {
-                videoBrightness.coerceIn(PlayerPreferences.MIN_VIDEO_BRIGHTNESS, PlayerPreferences.MAX_VIDEO_BRIGHTNESS)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_BRIGHTNESS
-            },
-            isContrastEnabled = isVideoContrastFilterEnabled,
-            contrast = if (isVideoContrastFilterEnabled) {
-                videoContrast.coerceIn(PlayerPreferences.MIN_VIDEO_CONTRAST, PlayerPreferences.MAX_VIDEO_CONTRAST)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_CONTRAST
-            },
-            isSaturationEnabled = isVideoSaturationFilterEnabled,
-            saturation = if (isVideoSaturationFilterEnabled) {
-                videoSaturation.coerceIn(PlayerPreferences.MIN_VIDEO_SATURATION, PlayerPreferences.MAX_VIDEO_SATURATION)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_SATURATION
-            },
-            isHueEnabled = isVideoHueFilterEnabled,
-            hue = if (isVideoHueFilterEnabled) {
-                videoHue.coerceIn(PlayerPreferences.MIN_VIDEO_HUE, PlayerPreferences.MAX_VIDEO_HUE)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_HUE
-            },
-            isGammaEnabled = isVideoGammaFilterEnabled,
-            gamma = if (isVideoGammaFilterEnabled) {
-                videoGamma.coerceIn(PlayerPreferences.MIN_VIDEO_GAMMA, PlayerPreferences.MAX_VIDEO_GAMMA)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_GAMMA
-            },
-            isSharpeningEnabled = isVideoSharpeningFilterEnabled,
-            sharpening = if (isVideoSharpeningFilterEnabled) {
-                videoSharpening.coerceIn(PlayerPreferences.DEFAULT_VIDEO_SHARPENING, PlayerPreferences.MAX_VIDEO_SHARPENING)
-            } else {
-                PlayerPreferences.DEFAULT_VIDEO_SHARPENING
-            },
-        )
-        return if (filters.shouldCreateEffect()) filters else VideoFilterPreferences.default()
     }
 
     private fun Bundle.toPlayerPreferences(): PlayerPreferences = PlayerPreferences(
@@ -1493,29 +1214,6 @@ class PlayerService : MediaSessionService() {
         videoSharpening = getFloat(CustomCommands.VIDEO_SHARPENING_KEY, PlayerPreferences.DEFAULT_VIDEO_SHARPENING),
     )
 
-    private fun buildVideoEffects(
-        transition: VideoFilterTransition,
-        decoderPriority: DecoderPriority,
-    ): List<Effect> {
-        if (!shouldUseVideoFiltersEffect(transition.targetFilters, decoderPriority)) return emptyList()
-        return listOf(
-            VideoFiltersEffect(
-                transition = transition,
-                transitionDurationMs = VIDEO_FILTER_TRANSITION_DURATION_MS,
-            ),
-        )
-    }
-
-    private fun shouldUseVideoFiltersEffect(
-        filters: VideoFilterPreferences,
-        decoderPriority: DecoderPriority,
-    ): Boolean = shouldApplyVideoEffects(decoderPriority) && !isCurrentVideoHdr && filters.shouldCreateEffect()
-
-    private fun Format.isHdrVideoFormat(): Boolean {
-        val transfer = colorInfo?.colorTransfer
-        return transfer == C.COLOR_TRANSFER_ST2084 || transfer == C.COLOR_TRANSFER_HLG
-    }
-
     private fun String.toLogSummary(): String = Uri.parse(this).toLogSummary()
 
     private fun Uri.toLogSummary(): String {
@@ -1528,19 +1226,6 @@ class PlayerService : MediaSessionService() {
         val extension = uri.lastPathSegment?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase().orEmpty()
         val hash = hashCode().toUInt().toString(radix = 16)
         return "scheme=${uri.scheme.orEmpty()} extension=$extension hash=$hash"
-    }
-
-    private fun applyLoudnessEnhancerGain() {
-        val enhancer = loudnessEnhancer ?: return
-        val gain = requestedVolumeGain
-
-        try {
-            enhancer.setTargetGain(gain)
-            enhancer.enabled = gain > 0
-            Logger.debug(TAG, "Apply loudness gain: requested=$requestedVolumeGain, enabled=${gain > 0}")
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to apply loudness enhancer gain", e)
-        }
     }
 
     private val mediaSessionCallback = object : MediaSession.Callback {
@@ -1565,10 +1250,10 @@ class PlayerService : MediaSessionService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future(Dispatchers.Default) {
-            preciseSeekMediaIds.clear()
+            preciseSeekCoordinator.clearPreciseMediaIds()
             val updatedMediaItems = updatedMediaItemsWithMetadata(mediaItems)
-            prepareCachedPreciseSeekMediaItems(updatedMediaItems)
-            loadArtworkInBackground(updatedMediaItems)
+            preciseSeekCoordinator.prepareCachedMediaItems(updatedMediaItems)
+            artworkLoader.loadInBackground(updatedMediaItems)
             return@future MediaSession.MediaItemsWithStartPosition(updatedMediaItems, startIndex, startPositionMs)
         }
 
@@ -1578,8 +1263,8 @@ class PlayerService : MediaSessionService() {
             mediaItems: MutableList<MediaItem>,
         ): ListenableFuture<MutableList<MediaItem>> = serviceScope.future(Dispatchers.Default) {
             val updatedMediaItems = updatedMediaItemsWithMetadata(mediaItems)
-            prepareCachedPreciseSeekMediaItems(updatedMediaItems)
-            loadArtworkInBackground(updatedMediaItems)
+            preciseSeekCoordinator.prepareCachedMediaItems(updatedMediaItems)
+            artworkLoader.loadInBackground(updatedMediaItems)
             return@future updatedMediaItems.toMutableList()
         }
 
@@ -1634,7 +1319,7 @@ class PlayerService : MediaSessionService() {
                     if (targetPositionMs == C.TIME_UNSET) {
                         return@future SessionResult(SessionError.ERROR_BAD_VALUE)
                     }
-                    return@future requestSeekForCurrentItem(targetPositionMs)
+                    return@future preciseSeekCoordinator.requestSeekForCurrentItem(targetPositionMs)
                 }
 
                 CustomCommands.SET_SKIP_SILENCE_ENABLED -> {
@@ -1679,18 +1364,21 @@ class PlayerService : MediaSessionService() {
                 }
 
                 CustomCommands.IS_LOUDNESS_GAIN_SUPPORTED -> {
-                    val isSupported = loudnessEnhancer != null
                     return@future SessionResult(
                         SessionResult.RESULT_SUCCESS,
                         Bundle().apply {
-                            putBoolean(CustomCommands.IS_LOUDNESS_GAIN_SUPPORTED_KEY, isSupported)
+                            putBoolean(CustomCommands.IS_LOUDNESS_GAIN_SUPPORTED_KEY, audioEffectsCoordinator.isLoudnessGainSupported)
                         },
                     )
                 }
 
                 CustomCommands.SET_LOUDNESS_GAIN -> {
                     val gain = args.getInt(CustomCommands.LOUDNESS_GAIN_KEY, 0)
-                    setEnhancerTargetGain(gain)
+                    audioEffectsCoordinator.setEnhancerTargetGain(
+                        gain = gain,
+                        preferences = playerPreferences,
+                        audioSessionId = mediaSession?.player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET,
+                    )
                     return@future SessionResult(SessionResult.RESULT_SUCCESS)
                 }
 
@@ -1698,31 +1386,31 @@ class PlayerService : MediaSessionService() {
                     return@future SessionResult(
                         SessionResult.RESULT_SUCCESS,
                         Bundle().apply {
-                            putInt(CustomCommands.LOUDNESS_GAIN_KEY, requestedVolumeGain)
+                            putInt(CustomCommands.LOUDNESS_GAIN_KEY, audioEffectsCoordinator.requestedVolumeGain)
                         },
                     )
                 }
 
                 CustomCommands.PREVIEW_VIDEO_FILTERS -> {
-                    previewVideoFilters(args.toPlayerPreferences())
+                    videoEffectsCoordinator.preview(mediaSession?.player as? ExoPlayer, args.toPlayerPreferences())
                     return@future SessionResult(SessionResult.RESULT_SUCCESS)
                 }
 
                 CustomCommands.GET_VIDEO_FORMAT -> {
-                    val format = currentVideoFormat
+                    val format = videoEffectsCoordinator.currentFormat
                     return@future SessionResult(
                         SessionResult.RESULT_SUCCESS,
                         Bundle().apply {
                             putString(CustomCommands.VIDEO_DECODER_PRIORITY_KEY, activeDecoderPriority.name)
-                            putString(CustomCommands.VIDEO_DECODER_NAME_KEY, currentVideoDecoderName)
+                            putString(CustomCommands.VIDEO_DECODER_NAME_KEY, videoEffectsCoordinator.currentDecoderName)
                             putInt(CustomCommands.VIDEO_WIDTH_KEY, format?.width ?: 0)
                             putInt(CustomCommands.VIDEO_HEIGHT_KEY, format?.height ?: 0)
                             putInt(CustomCommands.VIDEO_COLOR_TRANSFER_KEY, format?.colorInfo?.colorTransfer ?: C.INDEX_UNSET)
                             putInt(CustomCommands.VIDEO_COLOR_STANDARD_KEY, format?.colorInfo?.colorSpace ?: C.INDEX_UNSET)
                             putInt(CustomCommands.VIDEO_COLOR_RANGE_KEY, format?.colorInfo?.colorRange ?: C.INDEX_UNSET)
-                            putBoolean(CustomCommands.IS_VIDEO_HDR_KEY, isCurrentVideoHdr)
-                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_AVAILABLE_KEY, shouldApplyVideoEffects(activeDecoderPriority))
-                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_ACTIVE_KEY, activeVideoFiltersEffect != null)
+                            putBoolean(CustomCommands.IS_VIDEO_HDR_KEY, videoEffectsCoordinator.isCurrentHdr)
+                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_AVAILABLE_KEY, videoEffectsCoordinator.isAvailable())
+                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_ACTIVE_KEY, videoEffectsCoordinator.isEffectActive)
                         },
                     )
                 }
@@ -1786,6 +1474,7 @@ class PlayerService : MediaSessionService() {
         assHandler: AssHandler,
     ): ExoPlayer {
         activeDecoderPriority = decoderPriority
+        videoEffectsCoordinator.setDecoderPriority(decoderPriority)
         val extensionRendererMode = decoderPriority.extensionRendererMode()
         val shouldEnableDecoderFallback = decoderPriority.shouldEnableDecoderFallback()
         val shouldUseAudioExtensionFallback = decoderPriority.shouldUseAudioExtensionFallback()
@@ -1795,7 +1484,7 @@ class PlayerService : MediaSessionService() {
         )
         val renderersFactory = NormalizingRenderersFactory(
             context = applicationContext,
-            volumeNormalizationAudioProcessor = volumeNormalizationAudioProcessor,
+            volumeNormalizationAudioProcessor = audioEffectsCoordinator.volumeNormalizationAudioProcessor,
             shouldUseAudioExtensionFallback = shouldUseAudioExtensionFallback,
         )
             .setEnableDecoderFallback(shouldEnableDecoderFallback)
@@ -1833,12 +1522,8 @@ class PlayerService : MediaSessionService() {
                     LoopMode.ONE -> Player.REPEAT_MODE_ONE
                     LoopMode.ALL -> Player.REPEAT_MODE_ALL
                 }
-                currentVideoEffectsState = VideoEffectsState(
-                    filters = VideoFilterPreferences.default(),
-                    decoderPriority = activeDecoderPriority,
-                )
-                activeVideoFiltersEffect = null
-                applyVideoFilters(it, preferences)
+                videoEffectsCoordinator.resetPipeline()
+                videoEffectsCoordinator.apply(it, preferences)
             }
     }
 
@@ -1853,7 +1538,7 @@ class PlayerService : MediaSessionService() {
         serviceScope.launch {
             preferencesRepository.playerPreferences
                 .distinctUntilChanged { old, new -> old.toVideoFilterPreferences() == new.toVideoFilterPreferences() }
-                .collect(::applyVideoFilters)
+                .collect(videoEffectsCoordinator::apply)
         }
         serviceScope.launch {
             preferencesRepository.playerPreferences
@@ -1861,9 +1546,12 @@ class PlayerService : MediaSessionService() {
                 .collect { preferences ->
                     if (preferences.isVolumeBoostEnabled) {
                         val audioSessionId = mediaSession?.player?.audioSessionId ?: return@collect
-                        initializeLoudnessEnhancer(audioSessionId)
+                        audioEffectsCoordinator.initializeLoudnessEnhancer(
+                            audioSessionId = audioSessionId,
+                            preferences = playerPreferences,
+                        )
                     } else {
-                        releaseLoudnessEnhancer()
+                        audioEffectsCoordinator.releaseLoudnessEnhancer()
                     }
                 }
         }
@@ -1871,11 +1559,10 @@ class PlayerService : MediaSessionService() {
             preferencesRepository.playerPreferences
                 .distinctUntilChanged { old, new -> old.isVolumeNormalizationEnabled == new.isVolumeNormalizationEnabled }
                 .collect { preferences ->
-                    volumeNormalizationAudioProcessor.isEnabled = preferences.isVolumeNormalizationEnabled
-                    Logger.debug(TAG, "Apply volume normalization: enabled=${preferences.isVolumeNormalizationEnabled}")
+                    audioEffectsCoordinator.applyVolumeNormalization(preferences.isVolumeNormalizationEnabled)
                 }
         }
-        volumeNormalizationAudioProcessor.isEnabled = playerPreferences.isVolumeNormalizationEnabled
+        audioEffectsCoordinator.applyVolumeNormalization(playerPreferences.isVolumeNormalizationEnabled)
         val assHandler = AssHandler(renderType = resolveAssRenderType())
         this.assHandler = assHandler
         AssHandlerRegistry.register(assHandler)
@@ -1948,10 +1635,8 @@ class PlayerService : MediaSessionService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        releaseLoudnessEnhancer()
-        pendingPreciseSeekPromotionJob?.cancel()
-        pendingPreciseSeekPromotionJob = null
-        preciseSeekRequestId++
+        audioEffectsCoordinator.releaseLoudnessEnhancer()
+        preciseSeekCoordinator.release()
         assHandler?.let(AssHandlerRegistry::unregister)
         assHandler = null
         mediaSession?.run {
@@ -1963,20 +1648,9 @@ class PlayerService : MediaSessionService() {
             mediaSession = null
         }
         subtitleCacheDir.deleteFiles()
-        mkvCueParseJobs.clear()
         mediaParserRetried.clear()
         softwareDecoderRetried.clear()
         serviceScope.cancel()
-    }
-
-    private fun prepareCachedPreciseSeekMediaItems(mediaItems: List<MediaItem>) {
-        mediaItems.forEach { mediaItem ->
-            if (!mediaItem.mediaMetadata.isApproximateSeekEnabled) return@forEach
-            restoreCachedMkvSeekMap(mediaItem)?.let { seekMap ->
-                mkvSeekMapCache[mediaItem.mediaId] = seekMap
-                preciseSeekMediaIds.add(mediaItem.mediaId)
-            }
-        }
     }
 
     private suspend fun updatedMediaItemsWithMetadata(
@@ -2006,7 +1680,7 @@ class PlayerService : MediaSessionService() {
 
                 val externalSubs = videoState?.externalSubs ?: emptyList()
                 val validExternalSubs = externalSubs.filter { subUri ->
-                    if (subUri.scheme in DIRECT_SUBTITLE_URI_SCHEMES) return@filter true
+                    if (externalSubtitleLoader.isDirectSubtitleUri(subUri)) return@filter true
                     try {
                         contentResolver.openInputStream(subUri)?.close()
                         true
@@ -2024,22 +1698,18 @@ class PlayerService : MediaSessionService() {
                 validExternalSubs.forEach(onlineSubtitleRepository::touchSubtitle)
                 val existingSubConfigurations = mediaItem.localConfiguration?.subtitleConfigurations ?: emptyList()
                 val restoredSubConfigurations = validExternalSubs.map { subtitleUri ->
-                    if (subtitleUri.scheme in DIRECT_SUBTITLE_URI_SCHEMES) {
-                        buildDirectSubtitleConfiguration(subtitleUri)
-                    } else {
-                        uriToSubtitleConfiguration(
-                            uri = subtitleUri,
-                            subtitleEncoding = playerPreferences.subtitleTextEncoding,
-                        )
-                    }
+                    externalSubtitleLoader.buildConfiguration(
+                        uri = subtitleUri,
+                        subtitleEncoding = playerPreferences.subtitleTextEncoding,
+                    )
                 }
-                val mergedSubConfigurations = mergeSubtitleConfigurations(
+                val mergedSubConfigurations = externalSubtitleLoader.mergeConfigurations(
                     existing = existingSubConfigurations,
                     incoming = restoredSubConfigurations,
                 )
 
                 // 先写入占位封面，后台再异步加载真实封面
-                val artworkUri = getDefaultArtworkUri()
+                val artworkUri = artworkLoader.defaultArtworkUri()
 
                 val title = mediaItem.mediaMetadata.title ?: video?.nameWithExtension ?: getFilenameFromUri(uri)
                 val positionMs = mediaItem.mediaMetadata.positionMs ?: videoState?.position
@@ -2248,8 +1918,8 @@ class PlayerService : MediaSessionService() {
         val uri = mediaItem.localConfiguration?.uri
         val isRemoteSource = uri?.scheme in REMOTE_SOURCE_URI_SCHEMES || requestHeaders.isNotEmpty()
         val dataSourceFactory = createDataSourceFactory(uri, requestHeaders)
-        val cachedSeekMap = mkvSeekMapCache[mediaItem.mediaId]
-        val shouldUseFastStart = mediaItem.mediaMetadata.isApproximateSeekEnabled && mediaItem.mediaId !in preciseSeekMediaIds
+        val cachedSeekMap = preciseSeekCoordinator.cachedSeekMap(mediaItem.mediaId)
+        val shouldUseFastStart = mediaItem.mediaMetadata.isApproximateSeekEnabled && mediaItem.mediaId !in preciseSeekCoordinator
         if (cachedSeekMap != null && !shouldUseFastStart) {
             // 使用预解析的 SeekMap 注入到 extractor，跳过慢速 Cues 加载
             val factory = DefaultMediaSourceFactory(
@@ -2322,71 +1992,6 @@ class PlayerService : MediaSessionService() {
         return DefaultDataSource.Factory(applicationContext, httpFactory)
     }
 
-    private suspend fun promoteCurrentItemToPreciseSeek(
-        targetPositionMs: Long,
-        requestId: Long = ++preciseSeekRequestId,
-    ): SessionResult {
-        val player = mediaSession?.player as? ExoPlayer ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val initialItem = player.currentMediaItem ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val maxPosition = initialItem.mediaMetadata.durationMs
-            ?.takeIf { it > 0L }
-            ?: player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
-        val targetPosition = maxPosition?.let { targetPositionMs.coerceIn(0L, it) } ?: targetPositionMs.coerceAtLeast(0L)
-
-        if (!initialItem.mediaMetadata.isApproximateSeekEnabled || initialItem.mediaId in preciseSeekMediaIds) {
-            Logger.info(TAG, "Precise seek direct media=${initialItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
-            player.seekTo(targetPosition)
-            return SessionResult(SessionResult.RESULT_SUCCESS)
-        }
-
-        val seekMap = mkvSeekMapCache[initialItem.mediaId]
-            ?: withContext(Dispatchers.IO) { scheduleMkvCueCache(initialItem).await() }
-        if (requestId != preciseSeekRequestId) {
-            return SessionResult(SessionError.ERROR_BAD_VALUE)
-        }
-
-        val currentItem = player.currentMediaItem ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val currentIndex = player.currentMediaItemIndex
-        if (currentItem.mediaId != initialItem.mediaId || currentIndex !in 0 until player.mediaItemCount) {
-            return SessionResult(SessionError.ERROR_BAD_VALUE)
-        }
-        if (!currentItem.mediaMetadata.isApproximateSeekEnabled || currentItem.mediaId in preciseSeekMediaIds) {
-            Logger.info(TAG, "Precise seek direct media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
-            player.seekTo(targetPosition)
-            return SessionResult(SessionResult.RESULT_SUCCESS)
-        }
-        if (seekMap == null) {
-            Logger.info(TAG, "Precise seek postponed media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
-            player.seekTo(targetPosition)
-            return SessionResult(SessionResult.RESULT_SUCCESS)
-        }
-        mkvSeekMapCache[currentItem.mediaId] = seekMap
-
-        val updatedMediaItem = currentItem.copy(
-            positionMs = targetPosition,
-            isApproximateSeekEnabled = false,
-        )
-        preciseSeekMediaIds.add(currentItem.mediaId)
-        val shouldPlayWhenReady = player.playWhenReady
-        Logger.info(
-            TAG,
-            "Promote current item to precise seek media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition hasCachedSeekMap=true",
-        )
-        player.addMediaSource(currentIndex + 1, createMediaSource(updatedMediaItem))
-        player.seekTo(currentIndex + 1, targetPosition)
-        player.removeMediaItem(currentIndex)
-        player.prepare()
-        player.playWhenReady = shouldPlayWhenReady
-        serviceScope.launch {
-            val playbackStateUri = currentItem.resolvePlaybackStateUri()
-            mediaRepository.updateMediumPosition(
-                uri = playbackStateUri,
-                position = targetPosition,
-            )
-        }
-        return SessionResult(SessionResult.RESULT_SUCCESS)
-    }
-
     private fun MediaItem.playbackStateCandidates(): List<String> = buildPlaybackStateCandidates(
         originalUri = mediaId,
         remoteProtocol = mediaMetadata.remoteProtocol,
@@ -2401,195 +2006,6 @@ class PlayerService : MediaSessionService() {
             remoteFilePath = mediaMetadata.remoteFilePath,
         ) ?: mediaId,
     )
-
-    private suspend fun requestSeekForCurrentItem(targetPositionMs: Long): SessionResult {
-        val player = mediaSession?.player as? ExoPlayer ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val currentItem = player.currentMediaItem ?: return SessionResult(SessionError.ERROR_BAD_VALUE)
-        val maxPosition = currentItem.mediaMetadata.durationMs
-            ?.takeIf { it > 0L }
-            ?: player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
-        val targetPosition = maxPosition?.let { targetPositionMs.coerceIn(0L, it) } ?: targetPositionMs.coerceAtLeast(0L)
-
-        if (!currentItem.mediaMetadata.isApproximateSeekEnabled) {
-            Logger.info(TAG, "Precise seek direct media=${currentItem.mediaId.toPrivateMediaLogSummary()} target=$targetPosition")
-            player.seekTo(targetPosition)
-            return SessionResult(SessionResult.RESULT_SUCCESS)
-        }
-
-        val startPosition = player.currentPosition.takeIf { it != C.TIME_UNSET } ?: 0L
-        val startDelta = kotlin.math.abs(targetPosition - startPosition)
-        if (startDelta < FAST_SEEK_MIN_DELTA_MS) {
-            Logger.info(
-                TAG,
-                "Skip precise promotion mediaId=${currentItem.mediaId} target=$targetPosition start=$startPosition",
-            )
-            return SessionResult(SessionResult.RESULT_SUCCESS)
-        }
-
-        // approximate source 无法高效 seek，直接升级到 precise source
-        Logger.info(
-            TAG,
-            "Promote to precise seek mediaId=${currentItem.mediaId} start=$startPosition target=$targetPosition",
-        )
-        return promoteCurrentItemToPreciseSeek(targetPosition)
-    }
-
-    // 后台预解析 MKV Cues，为后续 seek 构建快速 SeekMap
-    private fun scheduleMkvCueCache(mediaItem: MediaItem): Deferred<androidx.media3.extractor.SeekMap?> {
-        val mediaId = mediaItem.mediaId
-        mkvSeekMapCache[mediaId]?.let { return CompletableDeferred(it) }
-        mkvCueParseJobs[mediaId]?.let { return it }
-
-        val restoredSeekMap = restoreCachedMkvSeekMap(mediaItem)
-        if (restoredSeekMap != null) {
-            mkvSeekMapCache[mediaId] = restoredSeekMap
-            return CompletableDeferred(restoredSeekMap)
-        }
-
-        val durationMs = mediaItem.mediaMetadata.durationMs
-        if (durationMs == null) return CompletableDeferred(null)
-        val uri = Uri.parse(mediaId)
-
-        val parseJob = serviceScope.async(Dispatchers.IO) {
-            val startTime = System.currentTimeMillis()
-            val cuePoints = MkvCuesParser.parse(applicationContext, uri)
-            val elapsed = System.currentTimeMillis() - startTime
-
-            if (cuePoints == null) {
-                Logger.debug(TAG, "MKV Cues pre-parse returned null for $mediaId (${elapsed}ms)")
-                return@async null
-            }
-
-            val durationUs = durationMs * 1_000L
-            val seekMap = buildSeekMapFromCues(cuePoints, durationUs)
-            mkvSeekMapCache[mediaId] = seekMap
-            persistMkvSeekMap(uri, cuePoints, durationUs)
-            Logger.info(
-                TAG,
-                "MKV Cues pre-parsed: ${cuePoints.size} cue points in ${elapsed}ms for $mediaId",
-            )
-            seekMap
-        }
-        parseJob.invokeOnCompletion {
-            mkvCueParseJobs.remove(mediaId, parseJob)
-        }
-        mkvCueParseJobs[mediaId] = parseJob
-        return parseJob
-    }
-
-    private fun continueDeferredStartupPreciseResume(currentMediaItem: MediaItem) {
-        val player = mediaSession?.player ?: return
-        val mediaId = currentMediaItem.mediaId
-        if (pendingStartupPreciseResumeToken != mediaId) return
-        if (!currentMediaItem.mediaMetadata.isApproximateSeekEnabled) {
-            pendingStartupPreciseResumeToken = null
-            pendingStartupPreciseResumePositionMs = null
-            return
-        }
-
-        val targetPosition = pendingStartupPreciseResumePositionMs ?: currentMediaItem.mediaMetadata.positionMs ?: return
-        if (targetPosition < STARTUP_PRECISE_RESUME_THRESHOLD_MS) {
-            pendingStartupPreciseResumeToken = null
-            pendingStartupPreciseResumePositionMs = null
-            return
-        }
-        if (player.currentPosition >= targetPosition - 1_000L) {
-            pendingStartupPreciseResumeToken = null
-            pendingStartupPreciseResumePositionMs = null
-            return
-        }
-
-        pendingPreciseSeekPromotionJob?.cancel()
-        pendingPreciseSeekPromotionJob = serviceScope.launch(Dispatchers.IO) {
-            val seekMap = mkvSeekMapCache[mediaId]
-                ?: restoreCachedMkvSeekMap(currentMediaItem)
-                ?: scheduleMkvCueCache(currentMediaItem).await()
-                ?: return@launch
-
-            mkvSeekMapCache[mediaId] = seekMap
-            withContext(Dispatchers.Main) {
-                val currentPlayer = mediaSession?.player ?: return@withContext
-                val current = currentPlayer.currentMediaItem ?: return@withContext
-                if (current.mediaId != mediaId) return@withContext
-                if (pendingStartupPreciseResumeToken != mediaId) return@withContext
-                pendingStartupPreciseResumeToken = null
-                pendingStartupPreciseResumePositionMs = null
-                Logger.info(TAG, "Resume deferred precise-seek media item=$mediaId position=$targetPosition")
-                promoteCurrentItemToPreciseSeek(targetPosition)
-            }
-        }
-    }
-
-    private fun mkvCueCacheFile(uri: Uri): File? {
-        val path = runCatching {
-            when (uri.scheme) {
-                ContentResolver.SCHEME_FILE -> uri.toFile().absolutePath
-                ContentResolver.SCHEME_CONTENT -> getPath(uri)
-                else -> null
-            }
-        }.getOrNull() ?: return null
-        val sourceFile = File(path)
-        if (!sourceFile.exists()) return null
-        val cacheKey = sourceFile.absolutePath.hashCode().toUInt().toString(16)
-        val cacheDir = File(cacheDir, "mkv-cues")
-        if (!cacheDir.exists()) cacheDir.mkdirs()
-        return File(cacheDir, "mkv-cues-$cacheKey.bin")
-    }
-
-    private fun persistMkvSeekMap(uri: Uri, cuePoints: List<one.only.player.feature.player.engine.media3.MkvCuePoint>, durationUs: Long) {
-        val sourceFile = resolveLocalFile(uri) ?: return
-        val cacheFile = mkvCueCacheFile(uri) ?: return
-        runCatching {
-            DataOutputStream(cacheFile.outputStream().buffered()).use { output ->
-                output.writeInt(MKV_CUES_CACHE_MAGIC)
-                output.writeLong(sourceFile.length())
-                output.writeLong(sourceFile.lastModified())
-                output.writeLong(durationUs)
-                output.writeInt(cuePoints.size)
-                cuePoints.forEach { cuePoint ->
-                    output.writeLong(cuePoint.timeUs)
-                    output.writeLong(cuePoint.clusterPosition)
-                }
-            }
-        }.onFailure {
-            cacheFile.delete()
-            Logger.debug(TAG, "Failed to persist MKV cue cache for $uri")
-        }
-    }
-
-    private fun restoreCachedMkvSeekMap(mediaItem: MediaItem): androidx.media3.extractor.SeekMap? {
-        val uri = Uri.parse(mediaItem.mediaId)
-        val sourceFile = resolveLocalFile(uri) ?: return null
-        val cacheFile = mkvCueCacheFile(uri) ?: return null
-        if (!cacheFile.exists()) return null
-
-        return runCatching {
-            DataInputStream(cacheFile.inputStream().buffered()).use { input ->
-                val magic = input.readInt()
-                if (magic != MKV_CUES_CACHE_MAGIC) return@runCatching null
-                val fileSize = input.readLong()
-                val lastModified = input.readLong()
-                if (fileSize != sourceFile.length() || lastModified != sourceFile.lastModified()) {
-                    return@runCatching null
-                }
-                val durationUs = input.readLong()
-                val count = input.readInt()
-                val cuePoints = List(count) {
-                    one.only.player.feature.player.engine.media3.MkvCuePoint(
-                        timeUs = input.readLong(),
-                        clusterPosition = input.readLong(),
-                    )
-                }
-                buildSeekMapFromCues(cuePoints, durationUs)
-            }
-        }.getOrNull()
-    }
-
-    private fun resolveLocalFile(uri: Uri): File? = when (uri.scheme) {
-        ContentResolver.SCHEME_FILE -> runCatching { uri.toFile() }.getOrNull()
-        ContentResolver.SCHEME_CONTENT -> getPath(uri)?.let(::File)
-        else -> null
-    }?.takeIf(File::exists)
 
     // 创建注入了预解析 SeekMap 的 ExtractorsFactory
     private fun createSeekMapInjectedExtractorsFactory(
@@ -2607,25 +2023,6 @@ class PlayerService : MediaSessionService() {
         extractors
     }
 
-    private fun getDefaultArtworkUri(): Uri = Uri.Builder().apply {
-        val defaultArtwork = R.drawable.artwork_default
-        scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
-        authority(resources.getResourcePackageName(defaultArtwork))
-        appendPath(resources.getResourceTypeName(defaultArtwork))
-        appendPath(resources.getResourceEntryName(defaultArtwork))
-    }.build()
-
-    private suspend fun loadArtworkForUri(uri: Uri): ByteArray? = try {
-        val result = imageLoader.execute(
-            ImageRequest.Builder(this@PlayerService)
-                .data(uri)
-                .build(),
-        )
-        (result as? SuccessResult)?.image?.toBitmap()?.toByteArray()
-    } catch (_: Exception) {
-        null
-    }
-
     // 在主线程播放列表中按 mediaId 查找对应的 Player、索引和 MediaItem
     private suspend fun findMediaItemInSession(mediaId: String): Triple<Player, Int, MediaItem>? = withContext(
         Dispatchers.Main.immediate,
@@ -2637,29 +2034,6 @@ class PlayerService : MediaSessionService() {
         Triple(player, index, player.getMediaItemAt(index))
     }
 
-    private fun loadArtworkInBackground(mediaItems: List<MediaItem>) {
-        serviceScope.launch(Dispatchers.Default) {
-            mediaItems.forEach { mediaItem ->
-                launch {
-                    val artworkData = loadArtworkForUri(mediaItem.mediaId.toUri()) ?: return@launch
-
-                    withContext(Dispatchers.Main) {
-                        val (player, index, currentMediaItem) = findMediaItemInSession(mediaItem.mediaId) ?: return@withContext
-                        val updatedMediaItem = currentMediaItem.buildUpon()
-                            .setMediaMetadata(
-                                currentMediaItem.mediaMetadata.buildUpon()
-                                    .setArtworkUri(null)
-                                    .setArtworkData(artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                                    .build(),
-                            )
-                            .build()
-                        player.replaceMediaItem(index, updatedMediaItem)
-                    }
-                }
-            }
-        }
-    }
-
     // 无内置字幕时加载外部字幕（同名文件 + 已持久化的用户添加字幕）
     private fun loadExternalSubtitlesForCurrentItem(
         mediaId: String,
@@ -2667,7 +2041,18 @@ class PlayerService : MediaSessionService() {
         onNoNewSubtitles: () -> Unit = {},
     ) {
         serviceScope.launch(Dispatchers.IO) {
-            val configurations = buildExternalSubtitleConfigurations(mediaId, requestHeaders)
+            val currentMediaItem = findMediaItemInSession(mediaId)?.third
+            val playbackStateUri = currentMediaItem?.resolvePlaybackStateUri()
+                ?: mediaRepository.getCanonicalMediaUri(uri = mediaId)
+            val playbackStateCandidates = currentMediaItem?.playbackStateCandidates()
+                ?: listOf(mediaId, playbackStateUri).distinct()
+            val configurations = externalSubtitleLoader.buildConfigurations(
+                mediaId = mediaId,
+                requestHeaders = requestHeaders,
+                playbackStateUri = playbackStateUri,
+                playbackStateCandidates = playbackStateCandidates,
+                subtitleEncoding = playerPreferences.subtitleTextEncoding,
+            )
             if (configurations.isEmpty()) {
                 withContext(Dispatchers.Main.immediate) { onNoNewSubtitles() }
                 return@launch
@@ -2678,7 +2063,7 @@ class PlayerService : MediaSessionService() {
                 if (player.currentMediaItem?.mediaId != mediaId) return@withContext
 
                 val existingConfigs = currentMediaItem.localConfiguration?.subtitleConfigurations ?: emptyList()
-                val mergedConfigs = mergeSubtitleConfigurations(existingConfigs, configurations)
+                val mergedConfigs = externalSubtitleLoader.mergeConfigurations(existingConfigs, configurations)
                 if (mergedConfigs.size == existingConfigs.size) {
                     onNoNewSubtitles()
                     return@withContext
@@ -2699,174 +2084,11 @@ class PlayerService : MediaSessionService() {
         }
     }
 
-    private suspend fun buildExternalSubtitleConfigurations(
-        mediaId: String,
-        requestHeaders: Map<String, String>,
-    ): List<MediaItem.SubtitleConfiguration> {
-        val uri = mediaId.toUri()
-        val currentMediaItem = findMediaItemInSession(mediaId)?.third
-        val playbackStateUri = currentMediaItem?.resolvePlaybackStateUri()
-            ?: mediaRepository.getCanonicalMediaUri(uri = mediaId)
-        val playbackStateCandidates = currentMediaItem?.playbackStateCandidates()
-            ?: listOf(mediaId, playbackStateUri).distinct()
-        val video = mediaRepository.getVideoByUri(uri = playbackStateUri)
-        val videoState = mediaRepository.getVideoState(
-            uris = playbackStateCandidates,
-        )
-        val dbExternalSubs = videoState?.externalSubs ?: emptyList()
-
-        // 发现同名本地字幕（排除已保存的）
-        val localSubs = (video?.path ?: getPath(uri))?.let {
-            File(it).getLocalSubtitles(
-                context = this@PlayerService,
-                excludeSubsList = dbExternalSubs,
-            )
-        } ?: emptyList()
-        val remoteSubs = buildRemoteSubtitleUris(
-            videoUri = uri,
-            requestHeaders = requestHeaders,
-            excludeSubsList = dbExternalSubs,
-        )
-
-        val allExternalSubs = dbExternalSubs + localSubs + remoteSubs
-        if (allExternalSubs.isEmpty()) return emptyList()
-
-        return allExternalSubs.map { subtitleUri ->
-            if (subtitleUri.scheme in DIRECT_SUBTITLE_URI_SCHEMES) {
-                buildDirectSubtitleConfiguration(subtitleUri)
-            } else {
-                uriToSubtitleConfiguration(
-                    uri = subtitleUri,
-                    subtitleEncoding = playerPreferences.subtitleTextEncoding,
-                )
-            }
-        }
-    }
-
-    private suspend fun buildRemoteSubtitleUris(
-        videoUri: Uri,
-        requestHeaders: Map<String, String>,
-        excludeSubsList: List<Uri>,
-    ): List<Uri> {
-        val fileName = getFilenameFromUri(videoUri)
-        val videoName = fileName.substringBeforeLast('.', missingDelimiterValue = fileName)
-        val excludedUris = excludeSubsList.map(Uri::toString).toSet()
-        val subtitleFiles = when (videoUri.scheme) {
-            "smb" -> listRemoteSmbDirectory(videoUri, requestHeaders)
-            "ftp" -> listRemoteFtpDirectory(videoUri, requestHeaders)
-            "http", "https" -> listRemoteWebDavDirectory(videoUri, requestHeaders)
-            else -> emptyList()
-        }
-
-        return subtitleFiles
-            .filter { !it.isDirectory }
-            .filter { it.hasSubtitleExtension() }
-            .filter { it.name.matchesSubtitleBase(videoName) }
-            .map { remoteFile -> buildRemoteSubtitleUri(videoUri, remoteFile) }
-            .filter { subtitleUri -> subtitleUri.toString() !in excludedUris }
-    }
-
-    private suspend fun listRemoteSmbDirectory(
-        videoUri: Uri,
-        requestHeaders: Map<String, String>,
-    ): List<RemoteFile> {
-        val host = videoUri.host ?: return emptyList()
-        val shareName = videoUri.pathSegments.firstOrNull() ?: return emptyList()
-        val directoryPath = "/${videoUri.pathSegments.dropLast(1).joinToString("/")}/"
-        val server = RemoteServer(
-            name = host,
-            protocol = ServerProtocol.SMB,
-            host = host,
-            port = videoUri.port.takeIf { it > 0 } ?: 445,
-            path = "/$shareName",
-            username = requestHeaders["_smb_username"].orEmpty(),
-            password = requestHeaders["_smb_password"].orEmpty(),
-        )
-        return smbClient.listDirectory(server, directoryPath).getOrElse { emptyList() }
-    }
-
-    private suspend fun listRemoteWebDavDirectory(
-        videoUri: Uri,
-        requestHeaders: Map<String, String>,
-    ): List<RemoteFile> {
-        val host = videoUri.host ?: return emptyList()
-        val directoryPath = videoUri.path
-            ?.substringBeforeLast('/', missingDelimiterValue = "")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "$it/" }
-            ?: "/"
-        val server = RemoteServer(
-            name = host,
-            protocol = ServerProtocol.WEBDAV,
-            host = host,
-            port = videoUri.port.takeIf { it > 0 },
-            path = directoryPath,
-            username = requestHeaders["_webdav_username"].orEmpty(),
-            password = requestHeaders["_webdav_password"].orEmpty(),
-        )
-        return webDavClient.listDirectory(server, directoryPath).getOrElse { emptyList() }
-    }
-
-    private suspend fun listRemoteFtpDirectory(
-        videoUri: Uri,
-        requestHeaders: Map<String, String>,
-    ): List<RemoteFile> {
-        val host = videoUri.host ?: return emptyList()
-        val directoryPath = videoUri.path
-            ?.substringBeforeLast('/', missingDelimiterValue = "")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { "$it/" }
-            ?: "/"
-        val server = RemoteServer(
-            name = host,
-            protocol = ServerProtocol.FTP,
-            host = host,
-            port = videoUri.port.takeIf { it > 0 },
-            path = directoryPath,
-            username = requestHeaders["_ftp_username"].orEmpty(),
-            password = requestHeaders["_ftp_password"].orEmpty(),
-        )
-        return ftpClient.listDirectory(server, directoryPath).getOrElse { emptyList() }
-    }
-
-    private fun buildRemoteSubtitleUri(videoUri: Uri, remoteFile: RemoteFile): Uri = Uri.parse(
-        "${videoUri.scheme}://${videoUri.authority}${remoteFile.path}",
-    )
-
-    private fun RemoteFile.hasSubtitleExtension(): Boolean {
-        val extension = name.substringAfterLast('.', missingDelimiterValue = "")
-        if (extension.isBlank()) return false
-        return extension.lowercase() in REMOTE_SUBTITLE_EXTENSIONS
-    }
-
-    private fun buildDirectSubtitleConfiguration(uri: Uri): MediaItem.SubtitleConfiguration {
-        val label = getFilenameFromUri(uri)
-        return MediaItem.SubtitleConfiguration.Builder(uri).apply {
-            setId(uri.toString())
-            setMimeType(uri.getSubtitleMime(displayName = label))
-            setLabel(label)
-        }.build()
-    }
-
-    private fun mergeSubtitleConfigurations(
-        existing: List<MediaItem.SubtitleConfiguration>,
-        incoming: List<MediaItem.SubtitleConfiguration>,
-    ): List<MediaItem.SubtitleConfiguration> {
-        val mergedById = LinkedHashMap<String, MediaItem.SubtitleConfiguration>()
-        existing.forEach { subtitleConfiguration ->
-            mergedById[subtitleConfiguration.id ?: subtitleConfiguration.uri.toString()] = subtitleConfiguration
-        }
-        incoming.forEach { subtitleConfiguration ->
-            mergedById[subtitleConfiguration.id ?: subtitleConfiguration.uri.toString()] = subtitleConfiguration
-        }
-        return mergedById.values.toList()
-    }
-
     private fun Player.restorePendingOrBestSubtitleTrack(
         tracks: Tracks,
         shouldFallbackToBest: Boolean,
     ) {
-        val textTracks = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+        val textTracks = subtitleTrackSelector.supportedTextTracks(tracks)
         if (textTracks.isEmpty()) return
 
         val mediaId = currentMediaItem?.mediaId
@@ -2878,76 +2100,15 @@ class PlayerService : MediaSessionService() {
             pendingRememberedSubtitleSelection = null
         }
 
-        switchToRememberedOrBestSubtitleTrack(
+        subtitleTrackSelector.switchToRememberedOrBestSubtitleTrack(
+            player = this,
             textTracks = textTracks,
             rememberedSubtitleTrackIndex = rememberedSubtitleTrackIndex,
             shouldFallbackToBest = shouldFallbackToBest,
         )
     }
 
-    private fun Player.switchToRememberedOrBestSubtitleTrack(
-        textTracks: List<Tracks.Group>,
-        rememberedSubtitleTrackIndex: Int?,
-        shouldFallbackToBest: Boolean,
-    ) {
-        when {
-            rememberedSubtitleTrackIndex == -1 -> switchTrack(C.TRACK_TYPE_TEXT, -1)
-            rememberedSubtitleTrackIndex in textTracks.indices -> switchTrack(C.TRACK_TYPE_TEXT, rememberedSubtitleTrackIndex ?: -1)
-            shouldFallbackToBest -> switchTrack(C.TRACK_TYPE_TEXT, findBestSubtitleTrackIndex(textTracks))
-        }
-    }
-
-    private fun findBestSubtitleTrackIndex(textTracks: List<Tracks.Group>): Int {
-        val preferred = playerPreferences.preferredSubtitleLanguage
-        if (preferred.isBlank()) return 0
-
-        val normalizedPref = normalizeLanguageTag(preferred)
-        for (i in textTracks.indices) {
-            val format = textTracks[i].getTrackFormat(0)
-            if (matchesPreferredLanguage(format, normalizedPref)) return i
-        }
-        return 0
-    }
-
-    private fun matchesPreferredLanguage(format: Format, preferred: String): Boolean {
-        val trackLang = format.language?.let(::normalizeLanguageTag) ?: return false
-
-        if (preferred.startsWith("zh-") && (trackLang == "zh" || trackLang.startsWith("zh-"))) {
-            return matchesChineseVariantByLabel(format.label, preferred)
-        }
-
-        return trackLang.startsWith(preferred) || preferred.startsWith(trackLang)
-    }
-
-    private fun matchesChineseVariantByLabel(label: String?, preferred: String): Boolean {
-        if (label == null) return preferred == "zh"
-        val lower = label.lowercase()
-        val isSimplified = preferred.contains("hans") || preferred.contains("cn")
-        val isTraditional = preferred.contains("hant") || preferred.contains("tw") || preferred.contains("hk")
-
-        return when {
-            isSimplified -> lower.containsAny("简", "chs", "simplified")
-            isTraditional -> lower.containsAny("繁", "cht", "traditional")
-            else -> true
-        }
-    }
-
-    private fun normalizeLanguageTag(tag: String): String {
-        val lower = tag.lowercase().replace('_', '-')
-        return ISO_639_2T_TO_1[lower] ?: ISO_639_2T_TO_1[lower.substringBefore('-')]?.let {
-            it + lower.removePrefix(lower.substringBefore('-'))
-        } ?: lower
-    }
-
     private fun resolveAssRenderType(): AssRenderType = AssRenderType.OVERLAY_CANVAS
-
-    private fun String.containsAny(vararg keywords: String): Boolean = keywords.any { contains(it, ignoreCase = true) }
-
-    private fun Bitmap.toByteArray(): ByteArray {
-        val stream = ByteArrayOutputStream()
-        compress(Bitmap.CompressFormat.JPEG, 100, stream)
-        return stream.toByteArray()
-    }
 }
 
 private fun readFully(stream: InputStream, buffer: ByteArray): Boolean {

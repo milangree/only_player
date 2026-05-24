@@ -1,4 +1,4 @@
-package one.only.player.feature.player.service
+package one.only.player.feature.player.service.audio
 
 import androidx.annotation.OptIn
 import androidx.media3.common.C
