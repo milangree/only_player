@@ -2,6 +2,7 @@ package one.only.player.feature.player
 
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -11,7 +12,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,7 +59,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +74,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
@@ -138,6 +139,13 @@ import one.only.player.feature.player.ui.controls.ControlsTopView
 import one.only.player.feature.player.ui.controls.PlayerCustomizableControlButton
 
 private const val TAG = "MediaPlayerScreen"
+private const val AMBIENCE_ARTWORK_SAMPLE_SIZE = 32
+private const val AMBIENCE_VISIBLE_ALPHA_THRESHOLD = 16
+private const val AMBIENCE_NEAR_BLACK_AVERAGE_LUMA = 10f
+private const val AMBIENCE_NEAR_BLACK_MAX_LUMA = 28f
+private const val AMBIENCE_NEAR_BLACK_AVERAGE_CHROMA = 8f
+private const val AMBIENCE_NEAR_BLACK_BRIGHT_PIXEL_RATIO = 0.02f
+private const val AMBIENCE_BRIGHT_LUMA = 42f
 
 val LocalControlsVisibilityState = compositionLocalOf<ControlsVisibilityState?> { null }
 val LocalPlayerIconStyle = compositionLocalOf { PlayerIconStyle.TONAL }
@@ -380,6 +388,12 @@ internal fun MediaPlayerScreen(
         }
         overlayView = null
         menuRouteStack = emptyList()
+    }
+    fun toggleAmbienceMode(shouldShowControls: Boolean = true) {
+        isAmbienceModeEnabled = !isAmbienceModeEnabled
+        if (shouldShowControls) {
+            controlsVisibilityState.showControls()
+        }
     }
     fun popMenuRoute() {
         if (menuRouteStack.lastOrNull() == MenuRoute.VideoFilters) {
@@ -663,10 +677,7 @@ internal fun MediaPlayerScreen(
         when (action) {
             PlayerDebugCommandBridge.ACTION_BACK -> onBackClick()
             PlayerDebugCommandBridge.ACTION_ROTATE -> rotationState.rotate()
-            PlayerDebugCommandBridge.ACTION_TOGGLE_AMBIENCE -> {
-                isAmbienceModeEnabled = !isAmbienceModeEnabled
-                controlsVisibilityState.showControls()
-            }
+            PlayerDebugCommandBridge.ACTION_TOGGLE_AMBIENCE -> toggleAmbienceMode()
             PlayerDebugCommandBridge.ACTION_SHOW_CONTROLS -> controlsVisibilityState.showControls()
             PlayerDebugCommandBridge.ACTION_HIDE_CONTROLS -> controlsVisibilityState.hideControls()
             PlayerDebugCommandBridge.ACTION_SHOW_PLAYLIST -> openOverlayPanel(OverlayView.PLAYLIST)
@@ -743,9 +754,6 @@ internal fun MediaPlayerScreen(
                     .fillMaxSize()
                     .background(Color.Black),
             ) {
-                if (isAmbienceModeEnabled) {
-                    AmbienceBackground(artworkData = metadataState.artworkData)
-                }
                 val safeDrawingTopPadding = WindowInsets.safeDrawing
                     .asPaddingValues()
                     .calculateTopPadding()
@@ -756,6 +764,13 @@ internal fun MediaPlayerScreen(
                         ?.let { with(LocalDensity.current) { it.toDp() } }
                         ?: 0.dp,
                 ) + 16.dp
+                if (isAmbienceModeEnabled) {
+                    AmbienceBackground(
+                        artworkData = metadataState.artworkData,
+                        artworkUri = metadataState.artworkUri,
+                    )
+                }
+
                 PlayerContentFrame(
                     player = player,
                     pictureInPictureState = pictureInPictureState,
@@ -780,6 +795,7 @@ internal fun MediaPlayerScreen(
                         externalSubtitleFontSource = externalSubtitleFontSource,
                     ),
                     decoderPriority = playerPreferences.decoderPriority,
+                    shouldUseTextureView = isAmbienceModeEnabled,
                 )
 
                 AnimatedVisibility(
@@ -946,8 +962,7 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.AMBIENCE_MODE)
                                             } else {
-                                                isAmbienceModeEnabled = !isAmbienceModeEnabled
-                                                controlsVisibilityState.showControls()
+                                                toggleAmbienceMode()
                                             }
                                         },
                                         isAmbienceModeEnabled = isAmbienceModeEnabled,
@@ -1161,8 +1176,7 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.AMBIENCE_MODE)
                                             } else {
-                                                isAmbienceModeEnabled = !isAmbienceModeEnabled
-                                                controlsVisibilityState.showControls()
+                                                toggleAmbienceMode()
                                             }
                                         },
                                         isAmbienceModeEnabled = isAmbienceModeEnabled,
@@ -1314,6 +1328,7 @@ internal fun MediaPlayerScreen(
                     when (route) {
                         MenuRoute.Root -> MenuRootContent(
                             isLockEnabled = controlsVisibilityState.isControlsLocked,
+                            isAmbienceModeEnabled = isAmbienceModeEnabled,
                             isPipSupported = pictureInPictureState.isPipSupported,
                             isTakingScreenshot = isTakingScreenshot,
                             onNavigate = ::navigateToMenuRoute,
@@ -1323,7 +1338,7 @@ internal fun MediaPlayerScreen(
                                 dismissOverlay()
                             },
                             onAmbienceClick = {
-                                isAmbienceModeEnabled = !isAmbienceModeEnabled
+                                toggleAmbienceMode(shouldShowControls = false)
                                 dismissOverlay()
                             },
                             onPictureInPictureClick = {
@@ -1527,19 +1542,28 @@ fun InfoView(
 @Composable
 private fun AmbienceBackground(
     artworkData: ByteArray?,
+    artworkUri: Uri?,
     modifier: Modifier = Modifier,
 ) {
-    artworkData ?: return
-    val imageBitmap = remember(artworkData) {
-        runCatching {
-            BitmapFactory.decodeByteArray(artworkData, 0, artworkData.size).asImageBitmap()
-        }.getOrNull()
-    } ?: return
+    val context = LocalContext.current
+    val shouldUseFallbackArtwork = remember(artworkData) {
+        artworkData?.isNearBlackAmbienceArtwork() == true
+    }
+    val model = when {
+        artworkData != null && !shouldUseFallbackArtwork -> artworkData
+        shouldUseFallbackArtwork -> R.drawable.artwork_default
+        artworkUri != null -> artworkUri
+        else -> R.drawable.artwork_default
+    }
 
-    Image(
-        bitmap = imageBitmap,
+    AsyncImage(
+        model = ImageRequest.Builder(context)
+            .data(model)
+            .build(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
+        placeholder = painterResource(R.drawable.artwork_default),
+        error = painterResource(R.drawable.artwork_default),
         modifier = modifier
             .fillMaxSize()
             .blur(48.dp),
@@ -1550,6 +1574,76 @@ private fun AmbienceBackground(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.42f)),
     )
+}
+
+private fun ByteArray.isNearBlackAmbienceArtwork(): Boolean {
+    val boundsOptions = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(this, 0, size, boundsOptions)
+    val width = boundsOptions.outWidth
+    val height = boundsOptions.outHeight
+    if (width <= 0 || height <= 0) return false
+
+    val bitmap = BitmapFactory.decodeByteArray(
+        this,
+        0,
+        size,
+        BitmapFactory.Options().apply {
+            inSampleSize = ambienceArtworkSampleSize(width, height)
+        },
+    ) ?: return false
+
+    return try {
+        var visiblePixelCount = 0
+        var brightPixelCount = 0
+        var totalLuma = 0f
+        var totalChroma = 0f
+        var maxLuma = 0f
+        val pixels = IntArray(bitmap.width)
+
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, y, bitmap.width, 1)
+            for (pixel in pixels) {
+                val alpha = pixel ushr 24
+                if (alpha <= AMBIENCE_VISIBLE_ALPHA_THRESHOLD) continue
+
+                val red = pixel shr 16 and 0xff
+                val green = pixel shr 8 and 0xff
+                val blue = pixel and 0xff
+                val luma = red * 0.299f + green * 0.587f + blue * 0.114f
+                val chroma = maxOf(red, green, blue) - minOf(red, green, blue)
+
+                visiblePixelCount++
+                totalLuma += luma
+                totalChroma += chroma
+                maxLuma = maxOf(maxLuma, luma)
+                if (luma >= AMBIENCE_BRIGHT_LUMA) brightPixelCount++
+            }
+        }
+
+        if (visiblePixelCount == 0) return true
+
+        val averageLuma = totalLuma / visiblePixelCount
+        val averageChroma = totalChroma / visiblePixelCount
+        val brightPixelRatio = brightPixelCount.toFloat() / visiblePixelCount
+        averageLuma <= AMBIENCE_NEAR_BLACK_AVERAGE_LUMA &&
+            averageChroma <= AMBIENCE_NEAR_BLACK_AVERAGE_CHROMA &&
+            (maxLuma <= AMBIENCE_NEAR_BLACK_MAX_LUMA || brightPixelRatio <= AMBIENCE_NEAR_BLACK_BRIGHT_PIXEL_RATIO)
+    } finally {
+        bitmap.recycle()
+    }
+}
+
+private fun ambienceArtworkSampleSize(
+    width: Int,
+    height: Int,
+): Int {
+    var sampleSize = 1
+    while (width / sampleSize > AMBIENCE_ARTWORK_SAMPLE_SIZE || height / sampleSize > AMBIENCE_ARTWORK_SAMPLE_SIZE) {
+        sampleSize *= 2
+    }
+    return sampleSize
 }
 
 @Composable

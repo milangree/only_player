@@ -1,5 +1,6 @@
 package one.only.player.feature.player.state
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -13,8 +14,8 @@ import one.only.player.feature.player.extensions.isVideoEffectsAvailable
 
 @Composable
 fun rememberMetadataState(player: Player): MetadataState {
-    val metadataState = remember { MetadataState(player) }
-    LaunchedEffect(player) { metadataState.observe() }
+    val metadataState = remember(player) { MetadataState(player) }
+    LaunchedEffect(metadataState) { metadataState.observe() }
     return metadataState
 }
 
@@ -24,6 +25,9 @@ class MetadataState(private val player: Player) {
         private set
 
     var artworkData: ByteArray? by mutableStateOf(null)
+        private set
+
+    var artworkUri: Uri? by mutableStateOf(null)
         private set
 
     var isVideoEffectsAvailable: Boolean by mutableStateOf(true)
@@ -46,6 +50,7 @@ class MetadataState(private val player: Player) {
     private fun updateFromPlayer() {
         title = player.mediaMetadata.title?.toString()
         artworkData = player.mediaMetadata.artworkData
+        artworkUri = player.mediaMetadata.artworkUri
         isVideoEffectsAvailable = player.mediaMetadata.isVideoEffectsAvailable
     }
 }

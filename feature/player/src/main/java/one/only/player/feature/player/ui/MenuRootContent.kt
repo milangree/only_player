@@ -26,6 +26,7 @@ import one.only.player.core.ui.designsystem.NextIcons
 @Composable
 fun MenuRootContent(
     isLockEnabled: Boolean,
+    isAmbienceModeEnabled: Boolean,
     isPipSupported: Boolean,
     isTakingScreenshot: Boolean,
     onNavigate: (MenuRoute) -> Unit,
@@ -91,6 +92,7 @@ fun MenuRootContent(
             text = stringResource(R.string.ambience_mode),
             testTag = "menu_item_ambience",
             onClick = onAmbienceClick,
+            isSelected = isAmbienceModeEnabled,
         )
         if (isPipSupported) {
             MenuItemRow(
@@ -134,8 +136,18 @@ private fun MenuItemRow(
     text: String,
     testTag: String,
     onClick: () -> Unit,
+    isSelected: Boolean = false,
     isEnabled: Boolean = true,
 ) {
+    val containerColor = when {
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surface
+    }
+    val contentColor = when {
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -143,7 +155,7 @@ private fun MenuItemRow(
             .testTag(testTag),
         onClick = onClick,
         enabled = isEnabled,
-        color = MaterialTheme.colorScheme.surface,
+        color = containerColor,
     ) {
         Row(
             modifier = Modifier
@@ -155,13 +167,21 @@ private fun MenuItemRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
+                tint = contentColor,
             )
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
                 modifier = Modifier.weight(1f),
             )
+            if (isSelected) {
+                Icon(
+                    imageVector = NextIcons.Check,
+                    contentDescription = null,
+                    tint = contentColor,
+                )
+            }
         }
     }
 }

@@ -26,6 +26,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import androidx.media3.ui.compose.state.rememberPresentationState
 import kotlin.math.max
 import kotlin.math.min
@@ -59,6 +60,7 @@ fun PlayerContentFrame(
     subtitleConfiguration: SubtitleConfiguration,
     decoderPriority: DecoderPriority,
     isGesturesEnabled: Boolean = true,
+    shouldUseTextureView: Boolean = false,
 ) {
     // decoder 切换重建 SurfaceView，重新绑定视频输出
     var surfaceRefreshKey by remember { mutableIntStateOf(0) }
@@ -82,6 +84,7 @@ fun PlayerContentFrame(
             }
     }
     var lastLoggedSurfaceLayout by remember { mutableStateOf("") }
+    val surfaceType = if (shouldUseTextureView) SURFACE_TYPE_TEXTURE_VIEW else SURFACE_TYPE_SURFACE_VIEW
 
     // Media3 1.10.1 的 videoSizeDp 名带 Dp 但实际存视频原始 px；ASS wrapper 不触发 onVideoSizeChanged，回退 metadata
     val videoSizePx = presentationState.videoSizeDp ?: run {
@@ -92,7 +95,7 @@ fun PlayerContentFrame(
         if (rotation == 90 || rotation == 270) Size(h, w) else Size(w, h)
     }
 
-    key(surfaceRefreshKey) {
+    key(surfaceRefreshKey, surfaceType) {
         BoxWithConstraints(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
@@ -116,7 +119,7 @@ fun PlayerContentFrame(
 
             PlayerSurface(
                 player = player,
-                surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+                surfaceType = surfaceType,
                 modifier = Modifier
                     .requiredSize(surfaceWidthDp, surfaceHeightDp)
                     .graphicsLayer {
@@ -133,7 +136,7 @@ fun PlayerContentFrame(
                             bounds.right.toInt(),
                             bounds.bottom.toInt(),
                         )
-                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:$surfaceRefreshKey"
+                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:$surfaceType:$surfaceRefreshKey"
                         if (key != lastLoggedSurfaceLayout) {
                             lastLoggedSurfaceLayout = key
                             Logger.info(

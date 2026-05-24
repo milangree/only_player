@@ -14,6 +14,7 @@ import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.PixelCopy
 import android.view.SurfaceView
+import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
@@ -768,8 +769,20 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private suspend fun saveCurrentFrameScreenshot(): Boolean = withContext(Dispatchers.Main) {
-        val surfaceView = findPlayerSurfaceView() ?: return@withContext false
-        if (surfaceView.width <= 0 || surfaceView.height <= 0) return@withContext false
+        val videoView = findPlayerVideoView() ?: return@withContext false
+        val bitmap = when (videoView) {
+            is SurfaceView -> copySurfaceView(videoView)
+            is TextureView -> copyTextureView(videoView)
+            else -> null
+        } ?: return@withContext false
+
+        withContext(Dispatchers.IO) {
+            saveScreenshotBitmap(bitmap)
+        }
+    }
+
+    private suspend fun copySurfaceView(surfaceView: SurfaceView): android.graphics.Bitmap? {
+        if (surfaceView.width <= 0 || surfaceView.height <= 0) return null
 
         val bitmap = createBitmap(surfaceView.width, surfaceView.height)
         val copyResult = suspendCancellableCoroutine<Int> { continuation ->
@@ -777,23 +790,26 @@ class PlayerActivity : AppCompatActivity() {
                 continuation.resume(result)
             }, Handler(mainLooper))
         }
-        if (copyResult != PixelCopy.SUCCESS) return@withContext false
-
-        withContext(Dispatchers.IO) {
-            saveScreenshotBitmap(bitmap)
-        }
+        return bitmap.takeIf { copyResult == PixelCopy.SUCCESS }
     }
 
-    private fun findPlayerSurfaceView(): SurfaceView? {
+    private fun copyTextureView(textureView: TextureView): android.graphics.Bitmap? {
+        if (textureView.width <= 0 || textureView.height <= 0) return null
+
+        val bitmap = createBitmap(textureView.width, textureView.height)
+        return textureView.getBitmap(bitmap)
+    }
+
+    private fun findPlayerVideoView(): View? {
         val rootView = window.decorView.rootView ?: return null
-        return findSurfaceView(rootView)
+        return findVideoView(rootView)
     }
 
-    private fun findSurfaceView(view: View): SurfaceView? {
-        if (view is SurfaceView) return view
+    private fun findVideoView(view: View): View? {
+        if (view is SurfaceView || view is TextureView) return view
         val group = view as? android.view.ViewGroup ?: return null
         for (index in 0 until group.childCount) {
-            findSurfaceView(group.getChildAt(index))?.let { return it }
+            findVideoView(group.getChildAt(index))?.let { return it }
         }
         return null
     }
