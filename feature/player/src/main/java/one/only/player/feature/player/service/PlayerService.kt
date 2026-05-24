@@ -33,6 +33,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -281,6 +282,8 @@ class PlayerService : MediaSessionService() {
         decoderPriority = DecoderPriority.AUTOMATIC,
     )
     private var activeVideoFiltersEffect: VideoFiltersEffect? = null
+    private var currentVideoFormat: Format? = null
+    private var currentVideoDecoderName: String? = null
     private var isCurrentVideoHdr = false
     private var hasRenderedFirstFrameForCurrentItem = false
     private var pendingVideoFiltersJob: Job? = null
@@ -350,7 +353,17 @@ class PlayerService : MediaSessionService() {
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
+            currentVideoDecoderName = decoderName
             Logger.info(TAG, "startup decoderInit=$decoderName dur=${initializationDurationMs}ms t=${elapsed()}ms")
+        }
+
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?,
+        ) {
+            currentVideoFormat = format
+            Logger.info(TAG, "startup videoFormat transfer=${format.colorInfo?.colorTransfer} standard=${format.colorInfo?.colorSpace} range=${format.colorInfo?.colorRange}")
         }
 
         override fun onAudioDecoderInitialized(
@@ -398,6 +411,8 @@ class PlayerService : MediaSessionService() {
                 handleRepeatedPlayback(mediaSession?.player ?: return)
                 return
             }
+            currentVideoFormat = null
+            currentVideoDecoderName = null
             isCurrentVideoHdr = false
             hasRenderedFirstFrameForCurrentItem = false
             pendingPreciseSeekPromotionJob?.cancel()
@@ -645,9 +660,10 @@ class PlayerService : MediaSessionService() {
             val currentMediaItem = player.currentMediaItem ?: return
 
             // 从 track format 读取视频尺寸，再通过 metadata extras 传给 MediaController
-            val format = player.currentTracks.groups
+            val trackFormat = player.currentTracks.groups
                 .firstOrNull { it.type == C.TRACK_TYPE_VIDEO }
                 ?.getTrackFormat(0)
+            val format = currentVideoFormat ?: trackFormat
             val width = format?.width ?: 0
             val height = format?.height ?: 0
             val rotation = format?.rotationDegrees ?: 0
@@ -655,7 +671,7 @@ class PlayerService : MediaSessionService() {
             isCurrentVideoHdr = transfer == C.COLOR_TRANSFER_ST2084 || transfer == C.COLOR_TRANSFER_HLG
             Logger.info(
                 TAG,
-                "startup firstFrameReady format=${width}x$height rot=$rotation duration=${player.duration} seekable=${player.isCurrentMediaItemSeekable} hdr=$isCurrentVideoHdr",
+                "startup firstFrameReady format=${width}x$height rot=$rotation duration=${player.duration} seekable=${player.isCurrentMediaItemSeekable} transfer=$transfer hdr=$isCurrentVideoHdr",
             )
 
             val duration = player.duration.takeIf { it != C.TIME_UNSET }
@@ -1634,6 +1650,25 @@ class PlayerService : MediaSessionService() {
                 CustomCommands.PREVIEW_VIDEO_FILTERS -> {
                     previewVideoFilters(args.toPlayerPreferences())
                     return@future SessionResult(SessionResult.RESULT_SUCCESS)
+                }
+
+                CustomCommands.GET_VIDEO_FORMAT -> {
+                    val format = currentVideoFormat
+                    return@future SessionResult(
+                        SessionResult.RESULT_SUCCESS,
+                        Bundle().apply {
+                            putString(CustomCommands.VIDEO_DECODER_PRIORITY_KEY, activeDecoderPriority.name)
+                            putString(CustomCommands.VIDEO_DECODER_NAME_KEY, currentVideoDecoderName)
+                            putInt(CustomCommands.VIDEO_WIDTH_KEY, format?.width ?: 0)
+                            putInt(CustomCommands.VIDEO_HEIGHT_KEY, format?.height ?: 0)
+                            putInt(CustomCommands.VIDEO_COLOR_TRANSFER_KEY, format?.colorInfo?.colorTransfer ?: C.INDEX_UNSET)
+                            putInt(CustomCommands.VIDEO_COLOR_STANDARD_KEY, format?.colorInfo?.colorSpace ?: C.INDEX_UNSET)
+                            putInt(CustomCommands.VIDEO_COLOR_RANGE_KEY, format?.colorInfo?.colorRange ?: C.INDEX_UNSET)
+                            putBoolean(CustomCommands.IS_VIDEO_HDR_KEY, isCurrentVideoHdr)
+                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_AVAILABLE_KEY, shouldApplyVideoEffects(activeDecoderPriority))
+                            putBoolean(CustomCommands.IS_VIDEO_EFFECTS_ACTIVE_KEY, activeVideoFiltersEffect != null)
+                        },
+                    )
                 }
 
                 CustomCommands.GET_SUBTITLE_DELAY -> {

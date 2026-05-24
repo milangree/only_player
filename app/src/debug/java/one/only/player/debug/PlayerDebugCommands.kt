@@ -20,6 +20,7 @@ import one.only.player.feature.player.PlayerDebugCommandBridge
 import one.only.player.feature.player.extensions.isApproximateSeekEnabled
 import one.only.player.feature.player.service.CustomCommands
 import one.only.player.feature.player.service.PlayerService
+import one.only.player.feature.player.service.getVideoFormatDebugInfo
 import one.only.player.feature.player.service.setTransientPlaybackSpeed
 
 internal fun Context.runPlayerAction(
@@ -101,6 +102,10 @@ internal fun Context.runPlayerGet(target: String): Bundle {
                         value = controller.currentCues.cues.size.toString(),
                         durationMs = controller.duration.safeTime(),
                         positionMs = controller.currentPosition.safeTime(),
+                    )
+                    "video_format" -> controller.videoFormatBundle(
+                        command = command,
+                        target = target,
                     )
                     else -> error("Unknown player info target: $target")
                 }
@@ -193,6 +198,40 @@ private suspend fun <T> Context.withMediaController(block: suspend (MediaControl
         } finally {
             MediaController.releaseFuture(future)
         }
+    }
+}
+
+private suspend fun MediaController.videoFormatBundle(
+    command: String,
+    target: String?,
+): Bundle {
+    val result = getVideoFormatDebugInfo()
+    if (result.resultCode != SessionResult.RESULT_SUCCESS) error("Video format command failed: ${result.resultCode}")
+
+    val extras = result.extras
+    val decoderPriority = extras.getString(CustomCommands.VIDEO_DECODER_PRIORITY_KEY).orEmpty()
+    val decoderName = extras.getString(CustomCommands.VIDEO_DECODER_NAME_KEY).orEmpty()
+    val width = extras.getInt(CustomCommands.VIDEO_WIDTH_KEY)
+    val height = extras.getInt(CustomCommands.VIDEO_HEIGHT_KEY)
+    val transfer = extras.getInt(CustomCommands.VIDEO_COLOR_TRANSFER_KEY)
+    val standard = extras.getInt(CustomCommands.VIDEO_COLOR_STANDARD_KEY)
+    val range = extras.getInt(CustomCommands.VIDEO_COLOR_RANGE_KEY)
+    val isHdr = extras.getBoolean(CustomCommands.IS_VIDEO_HDR_KEY)
+    val areEffectsAvailable = extras.getBoolean(CustomCommands.IS_VIDEO_EFFECTS_AVAILABLE_KEY)
+    val areEffectsActive = extras.getBoolean(CustomCommands.IS_VIDEO_EFFECTS_ACTIVE_KEY)
+    return Bundle(extras).apply {
+        putAll(
+            debugResult(
+                isOk = true,
+                message = "Video format: decoder=$decoderPriority/$decoderName size=${width}x$height transfer=$transfer standard=$standard range=$range hdr=$isHdr effectsAvailable=$areEffectsAvailable effectsActive=$areEffectsActive",
+                command = command,
+                target = target,
+                value = transfer.toString(),
+                durationMs = duration.safeTime(),
+                positionMs = currentPosition.safeTime(),
+                mediaId = currentMediaItem?.mediaId,
+            ),
+        )
     }
 }
 

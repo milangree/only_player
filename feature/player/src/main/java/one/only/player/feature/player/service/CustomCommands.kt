@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import kotlinx.coroutines.guava.await
 import one.only.player.core.model.PlayerPreferences
 
@@ -24,6 +25,7 @@ enum class CustomCommands(val customAction: String) {
     SET_LOUDNESS_GAIN(customAction = "SET_LOUDNESS_GAIN"),
     GET_LOUDNESS_GAIN(customAction = "GET_LOUDNESS_GAIN"),
     PREVIEW_VIDEO_FILTERS(customAction = "PREVIEW_VIDEO_FILTERS"),
+    GET_VIDEO_FORMAT(customAction = "GET_VIDEO_FORMAT"),
     ;
 
     val sessionCommand = SessionCommand(customAction, Bundle.EMPTY)
@@ -55,6 +57,16 @@ enum class CustomCommands(val customAction: String) {
         const val VIDEO_GAMMA_KEY = "video_gamma"
         const val IS_VIDEO_SHARPENING_FILTER_ENABLED_KEY = "is_video_sharpening_filter_enabled"
         const val VIDEO_SHARPENING_KEY = "video_sharpening"
+        const val VIDEO_DECODER_PRIORITY_KEY = "video_decoder_priority"
+        const val VIDEO_DECODER_NAME_KEY = "video_decoder_name"
+        const val VIDEO_WIDTH_KEY = "video_width"
+        const val VIDEO_HEIGHT_KEY = "video_height"
+        const val VIDEO_COLOR_TRANSFER_KEY = "video_color_transfer"
+        const val VIDEO_COLOR_STANDARD_KEY = "video_color_standard"
+        const val VIDEO_COLOR_RANGE_KEY = "video_color_range"
+        const val IS_VIDEO_HDR_KEY = "is_video_hdr"
+        const val IS_VIDEO_EFFECTS_AVAILABLE_KEY = "is_video_effects_available"
+        const val IS_VIDEO_EFFECTS_ACTIVE_KEY = "is_video_effects_active"
     }
 }
 
@@ -158,6 +170,11 @@ fun MediaController.previewVideoFilters(preferences: PlayerPreferences) {
     }
     sendCustomCommand(CustomCommands.PREVIEW_VIDEO_FILTERS.sessionCommand, args)
 }
+
+suspend fun MediaController.getVideoFormatDebugInfo(): SessionResult = sendCustomCommand(
+    CustomCommands.GET_VIDEO_FORMAT.sessionCommand,
+    Bundle.EMPTY,
+).await()
 
 suspend fun MediaController.getLoudnessGain(): Int {
     val result = sendCustomCommand(CustomCommands.GET_LOUDNESS_GAIN.sessionCommand, Bundle.EMPTY)

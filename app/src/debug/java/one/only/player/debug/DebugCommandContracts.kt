@@ -108,6 +108,7 @@ internal val PLAYER_GET_METHODS = setOf(
     "player.position",
     "player.duration",
     "player.cues",
+    "player.video_format",
 )
 
 internal val UI_PLAYER_ACTIONS = setOf(
