@@ -40,6 +40,7 @@ internal class PreciseSeekCoordinator(
     private val resolvePlaybackStateUri: suspend (MediaItem) -> String,
     private val updatePlaybackPosition: suspend (String, Long) -> Unit,
     private val mediaLogSummary: (String) -> String,
+    private val shouldUseFastSeek: (MediaItem) -> Boolean,
 ) {
 
     private var pendingPromotionJob: Job? = null
@@ -59,12 +60,13 @@ internal class PreciseSeekCoordinator(
         preciseSeekMediaIds.clear()
     }
 
-    fun resetForMediaItem() {
+    fun resetForMediaItem(mediaId: String?) {
         pendingPromotionJob?.cancel()
         pendingPromotionJob = null
         requestId++
         pendingStartupResumeToken = null
         pendingStartupResumePositionMs = null
+        preciseSeekMediaIds.retainAll(setOfNotNull(mediaId))
     }
 
     fun release() {
@@ -86,6 +88,12 @@ internal class PreciseSeekCoordinator(
 
     fun restoreCachedSeekMapForStartup(mediaItem: MediaItem): SeekMap? {
         val seekMap = restoreCachedSeekMap(mediaItem) ?: return null
+        seekMapCache[mediaItem.mediaId] = seekMap
+        return seekMap
+    }
+
+    suspend fun awaitSeekMapForStartup(mediaItem: MediaItem): SeekMap? {
+        val seekMap = scheduleCueCache(mediaItem).await() ?: return null
         seekMapCache[mediaItem.mediaId] = seekMap
         return seekMap
     }
@@ -223,6 +231,17 @@ internal class PreciseSeekCoordinator(
             return SessionResult(SessionResult.RESULT_SUCCESS)
         }
 
+        if (shouldUseFastSeek(currentItem) && player.isCurrentMediaItemSeekable) {
+            Logger.info(TAG, "Fast seek media=${mediaLogSummary(currentItem.mediaId)} start=$startPosition target=$targetPosition")
+            scheduleCueCache(currentItem)
+            player.seekTo(targetPosition)
+            scope.launch {
+                val playbackStateUri = resolvePlaybackStateUri(currentItem)
+                updatePlaybackPosition(playbackStateUri, targetPosition)
+            }
+            return SessionResult(SessionResult.RESULT_SUCCESS)
+        }
+
         Logger.info(
             TAG,
             "Promote to precise seek media=${mediaLogSummary(currentItem.mediaId)} start=$startPosition target=$targetPosition",
@@ -248,7 +267,20 @@ internal class PreciseSeekCoordinator(
         }
 
         val seekMap = seekMapCache[initialItem.mediaId]
-            ?: withContext(Dispatchers.IO) { scheduleCueCache(initialItem).await() }
+            ?: restoreCachedSeekMap(initialItem)
+            ?: run {
+                scheduleCueCache(initialItem)
+                null
+            }
+        if (seekMap == null && shouldUseFastSeek(initialItem) && player.isCurrentMediaItemSeekable) {
+            Logger.info(TAG, "Fast seek without cached cues media=${mediaLogSummary(initialItem.mediaId)} target=$targetPosition")
+            player.seekTo(targetPosition)
+            scope.launch {
+                val playbackStateUri = resolvePlaybackStateUri(initialItem)
+                updatePlaybackPosition(playbackStateUri, targetPosition)
+            }
+            return SessionResult(SessionResult.RESULT_SUCCESS)
+        }
         if (currentRequestId != requestId) {
             return SessionResult(SessionError.ERROR_BAD_VALUE)
         }

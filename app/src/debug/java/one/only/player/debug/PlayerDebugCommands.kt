@@ -136,6 +136,9 @@ private suspend fun MediaController.awaitSeekTo(positionMs: Long) {
     if (!awaitMediaReady()) {
         error("Player is not ready for seek")
     }
+    val startPositionMs = currentPosition.safeTime()
+    val isApproximateSeekEnabled = currentMediaItem?.mediaMetadata?.isApproximateSeekEnabled == true ||
+        positionMs >= FAST_SEEK_MIN_DURATION_MS
     val args = Bundle().apply {
         putLong(CustomCommands.SEEK_POSITION_MS_KEY, positionMs)
     }
@@ -143,7 +146,7 @@ private suspend fun MediaController.awaitSeekTo(positionMs: Long) {
     if (result.resultCode != SessionResult.RESULT_SUCCESS) {
         error("Precise seek command failed: ${result.resultCode}")
     }
-    if (!awaitSettledSeek(positionMs)) {
+    if (!awaitSettledSeek(positionMs, startPositionMs, isApproximateSeekEnabled)) {
         error("Seek did not settle: target=$positionMs position=${currentPosition.safeTime()} state=$playbackState")
     }
 }
@@ -157,13 +160,22 @@ private suspend fun MediaController.awaitMediaReady(): Boolean {
     return false
 }
 
-private suspend fun MediaController.awaitSettledSeek(targetPositionMs: Long): Boolean {
+private suspend fun MediaController.awaitSettledSeek(
+    targetPositionMs: Long,
+    startPositionMs: Long,
+    isApproximateSeekEnabled: Boolean,
+): Boolean {
     val startedAtMs = SystemClock.elapsedRealtime()
     while (SystemClock.elapsedRealtime() - startedAtMs < SEEK_SETTLE_TIMEOUT_MS) {
         val position = currentPosition.safeTime()
         val duration = duration.safeTime().takeIf { it > 0L }
         val targetPosition = duration?.let { targetPositionMs.coerceIn(0L, it) } ?: targetPositionMs.coerceAtLeast(0L)
-        val isPositionReady = kotlin.math.abs(position - targetPosition) <= SEEK_SETTLE_TOLERANCE_MS
+        val isPositionReady = if (isApproximateSeekEnabled) {
+            kotlin.math.abs(position - startPositionMs) > SEEK_SETTLE_TOLERANCE_MS &&
+                kotlin.math.abs(position - targetPosition) <= APPROXIMATE_SEEK_SETTLE_TOLERANCE_MS
+        } else {
+            kotlin.math.abs(position - targetPosition) <= SEEK_SETTLE_TOLERANCE_MS
+        }
         if (isPositionReady && playbackState != Player.STATE_BUFFERING) return true
         delay(SEEK_SETTLE_POLL_INTERVAL_MS)
     }
@@ -277,3 +289,5 @@ private const val MEDIA_READY_TIMEOUT_MS = 8_000L
 private const val SEEK_SETTLE_TIMEOUT_MS = 20_000L
 private const val SEEK_SETTLE_POLL_INTERVAL_MS = 100L
 private const val SEEK_SETTLE_TOLERANCE_MS = 1_500L
+private const val APPROXIMATE_SEEK_SETTLE_TOLERANCE_MS = 30_000L
+private const val FAST_SEEK_MIN_DURATION_MS = 120_000L

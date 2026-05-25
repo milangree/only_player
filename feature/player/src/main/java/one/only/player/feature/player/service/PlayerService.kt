@@ -27,8 +27,10 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
@@ -145,6 +147,12 @@ class PlayerService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlayerService"
+        private const val LOCAL_MIN_BUFFER_MS = 250
+        private const val LOCAL_MAX_BUFFER_MS = 30_000
+        private const val LOCAL_BUFFER_FOR_PLAYBACK_MS = 150
+        private const val LOCAL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 150
+        private val FAST_SEEK_PARAMETERS = SeekParameters.CLOSEST_SYNC
+        private val EXACT_SEEK_PARAMETERS = SeekParameters.DEFAULT
         private val REMOTE_SOURCE_URI_SCHEMES = setOf("smb", "ftp")
     }
 
@@ -240,6 +248,7 @@ class PlayerService : MediaSessionService() {
                 )
             },
             mediaLogSummary = { mediaId -> mediaId.toPrivateMediaLogSummary() },
+            shouldUseFastSeek = { mediaItem -> mediaItem.shouldUseFastSeek() },
         )
     }
 
@@ -273,8 +282,11 @@ class PlayerService : MediaSessionService() {
                 handleRepeatedPlayback(mediaSession?.player ?: return)
                 return
             }
-            videoEffectsCoordinator.resetForMediaItem(mediaSession?.player as? ExoPlayer)
-            preciseSeekCoordinator.resetForMediaItem()
+            (mediaSession?.player as? ExoPlayer)?.let { player ->
+                videoEffectsCoordinator.resetForMediaItem(player)
+                applySeekParameters(player)
+            }
+            preciseSeekCoordinator.resetForMediaItem(mediaItem?.mediaId)
             isMediaItemReady = false
             isPendingExternalSubAutoSelect = false
             pendingRememberedSubtitleSelection = null
@@ -301,22 +313,41 @@ class PlayerService : MediaSessionService() {
 
                 val resumePositionMs = metadata.positionMs?.takeIf { playerPreferences.resume == Resume.YES }
                 if (metadata.isApproximateSeekEnabled) {
-                    val restoredSeekMap = preciseSeekCoordinator.restoreCachedSeekMapForStartup(mediaItem)
-                    preciseSeekCoordinator.scheduleCueCache(mediaItem)
-
-                    if (restoredSeekMap != null) {
-                        preciseSeekCoordinator.markPrecise(mediaItem.mediaId)
-                        resumePositionMs?.takeIf(preciseSeekCoordinator::shouldUsePreciseStartupResume)?.let {
-                            Logger.info(TAG, "Resume cached precise-seek media=${mediaItem.mediaId.toPrivateMediaLogSummary()} position=$it")
-                            mediaSession?.player?.seekTo(it)
-                        }
-                    } else {
-                        resumePositionMs?.takeIf { it > 0L }?.let {
-                            Logger.info(TAG, "Resume deferred precise-seek media=${mediaItem.mediaId.toPrivateMediaLogSummary()} position=$it")
+                    serviceScope.launch(Dispatchers.IO) {
+                        val seekMap = preciseSeekCoordinator.awaitSeekMapForStartup(mediaItem)
+                        val resumePosition = resumePositionMs?.takeIf(preciseSeekCoordinator::shouldUsePreciseStartupResume)
+                        if (seekMap == null && resumePosition != null) {
+                            Logger.info(TAG, "Resume deferred precise-seek media=${mediaItem.mediaId.toPrivateMediaLogSummary()} position=$resumePosition")
                             preciseSeekCoordinator.deferStartupResume(
                                 mediaId = mediaItem.mediaId,
-                                positionMs = it,
+                                positionMs = resumePosition,
                             )
+                            return@launch
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            val player = mediaSession?.player as? ExoPlayer ?: return@withContext
+                            val currentItem = player.currentMediaItem ?: return@withContext
+                            if (currentItem.mediaId != mediaItem.mediaId) return@withContext
+                            val currentIndex = player.currentMediaItemIndex
+                            val currentPosition = resumePosition
+                                ?: player.currentPosition.takeIf { it != C.TIME_UNSET }
+                                ?: 0L
+                            val updatedMediaItem = currentItem.copy(
+                                positionMs = currentPosition,
+                                isApproximateSeekEnabled = false,
+                            )
+                            preciseSeekCoordinator.markPrecise(mediaItem.mediaId)
+                            val shouldPlayWhenReady = player.playWhenReady
+                            player.addMediaSource(currentIndex + 1, createMediaSource(updatedMediaItem))
+                            player.seekTo(currentIndex + 1, currentPosition)
+                            player.removeMediaItem(currentIndex)
+                            player.prepare()
+                            player.playWhenReady = shouldPlayWhenReady
+                            applySeekParameters(player)
+                            resumePosition?.let {
+                                Logger.info(TAG, "Resume cached precise-seek media=${mediaItem.mediaId.toPrivateMediaLogSummary()} position=$it")
+                            }
                         }
                     }
                     return
@@ -586,6 +617,7 @@ class PlayerService : MediaSessionService() {
             )
             preciseSeekCoordinator.continueDeferredStartupResume(updatedMediaItem)
             (player as? ExoPlayer)?.let {
+                applySeekParameters(it)
                 videoEffectsCoordinator.markFirstFrameRendered(
                     player = it,
                     format = format,
@@ -1075,6 +1107,22 @@ class PlayerService : MediaSessionService() {
         override fun release() = delegate.release()
     }
 
+    private fun applySeekParameters(player: ExoPlayer) {
+        val mediaItem = player.currentMediaItem
+        player.setSeekParameters(
+            if (mediaItem.shouldUseFastSeek()) {
+                FAST_SEEK_PARAMETERS
+            } else {
+                EXACT_SEEK_PARAMETERS
+            },
+        )
+    }
+
+    private fun MediaItem?.shouldUseFastSeek(): Boolean {
+        val durationMs = this?.mediaMetadata?.durationMs ?: return false
+        return durationMs >= playerPreferences.minDurationForFastSeek
+    }
+
     private fun handleRepeatedPlayback(player: Player) {
         player.currentMediaItem?.mediaMetadata?.let { metadata ->
             player.setPlaybackSpeed(playerPreferences.defaultPlaybackSpeed)
@@ -1354,6 +1402,15 @@ class PlayerService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    private fun createLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
+        .setBufferDurationsMsForLocalPlayback(
+            LOCAL_MIN_BUFFER_MS,
+            LOCAL_MAX_BUFFER_MS,
+            LOCAL_BUFFER_FOR_PLAYBACK_MS,
+            LOCAL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+        )
+        .build()
+
     private fun createPlayer(
         decoderPriority: DecoderPriority,
         assHandler: AssHandler,
@@ -1388,6 +1445,8 @@ class PlayerService : MediaSessionService() {
             .setMediaSourceFactory(sessionMediaSourceFactory)
             .setRenderersFactory(renderersFactory.withAssSupport(assHandler))
             .setTrackSelector(trackSelector)
+            .setLoadControl(createLoadControl())
+            .setSeekParameters(FAST_SEEK_PARAMETERS)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -1399,6 +1458,7 @@ class PlayerService : MediaSessionService() {
             .build()
             .also {
                 assHandler.init(it)
+                applySeekParameters(it)
                 it.addListener(playbackStateListener)
                 it.addAnalyticsListener(startupAnalyticsListener)
                 it.pauseAtEndOfMediaItems = !preferences.shouldAutoPlay
