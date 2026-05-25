@@ -23,7 +23,7 @@ class OnlyPlayerApplication :
         super.onCreate()
         AppThemeModeManager.applyPlatformToCurrent(
             context = applicationContext,
-            mode = readBootstrapPreferences(dataDir = applicationInfo.dataDir).themeConfig.toAppThemeMode(),
+            mode = readPersistedThemeConfig(dataDir = applicationInfo.dataDir).toAppThemeMode(),
         )
         Logger.initialize(this)
         Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
