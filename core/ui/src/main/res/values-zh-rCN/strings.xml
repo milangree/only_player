@@ -306,6 +306,8 @@
     <string name="loop_mode_off">循环：关</string>
     <string name="loop_mode">循环模式</string>
     <string name="libraries">程序库</string>
+    <string name="project_repository">项目仓库</string>
+    <string name="telegram_group">Telegram 群组</string>
     <string name="diagnostics">诊断</string>
     <string name="app_logs">应用日志</string>
     <string name="app_logs_description">查看、分享、保存并清空存储在应用私有目录中的日志</string>

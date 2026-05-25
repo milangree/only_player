@@ -42,10 +42,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -252,6 +254,7 @@ fun AboutApp(
     onLibrariesClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val appVersion = remember { context.appVersion() }
     val appIcon = remember { context.appIcon()?.asImageBitmap() }
 
@@ -311,7 +314,9 @@ fun AboutApp(
                     modifier = Modifier.size(56.dp),
                 )
             }
-            Column {
+            Column(
+                modifier = Modifier.weight(1f),
+            ) {
                 Text(
                     text = stringResource(id = R.string.app_name),
                     fontSize = 22.sp,
@@ -330,24 +335,72 @@ fun AboutApp(
                     )
                 }
             }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AboutIconButton(
+                    icon = painterResource(R.drawable.ic_brand_github),
+                    contentDescription = stringResource(R.string.project_repository),
+                    testTag = "btn_settings_about_repository",
+                    onClick = { uriHandler.openUriOrShowToast(PROJECT_REPOSITORY_URL, context) },
+                )
+                AboutIconButton(
+                    icon = painterResource(R.drawable.ic_brand_telegram),
+                    contentDescription = stringResource(R.string.telegram_group),
+                    testTag = "btn_settings_about_telegram",
+                    onClick = { uriHandler.openUriOrShowToast(TELEGRAM_GROUP_URL, context) },
+                )
+            }
         }
 
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("btn_settings_about_libraries"),
+        AboutLinkButton(
+            text = stringResource(R.string.libraries),
+            testTag = "btn_settings_about_libraries",
             onClick = onLibrariesClick,
-            colors = ButtonDefaults.buttonColors(
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = .12f),
-                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = .12f),
-            ),
-            shape = RoundedCornerShape(8.dp),
-        ) {
-            Text(text = stringResource(R.string.libraries))
-        }
+        )
+    }
+}
+
+@Composable
+private fun AboutIconButton(
+    icon: Painter,
+    contentDescription: String,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    FilledTonalIconButton(
+        modifier = Modifier.testTag(testTag),
+        onClick = onClick,
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = contentDescription,
+        )
+    }
+}
+
+@Composable
+private fun AboutLinkButton(
+    text: String,
+    testTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .testTag(testTag),
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = .12f),
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = .12f),
+        ),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Text(text = text)
     }
 }
 
@@ -369,6 +422,9 @@ private fun rememberDeviceArchitecture(): String = remember {
 private fun rememberAndroidVersion(): String = remember {
     "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
 }
+
+private const val PROJECT_REPOSITORY_URL = "https://github.com/Kindness-Kismet/One-Player"
+private const val TELEGRAM_GROUP_URL = "https://t.me/MaterialDesign3"
 
 internal fun UriHandler.openUriOrShowToast(uri: String, context: Context) {
     try {

@@ -313,6 +313,8 @@
     <string name="loop_mode_one">Loop: One</string>
     <string name="loop_mode_all">Loop: All</string>
     <string name="libraries">Libraries</string>
+    <string name="project_repository">Project repository</string>
+    <string name="telegram_group">Telegram group</string>
     <string name="diagnostics">Diagnostics</string>
     <string name="app_logs">App logs</string>
     <string name="app_logs_description">View, share, save, and clear logs stored in the app private directory</string>
