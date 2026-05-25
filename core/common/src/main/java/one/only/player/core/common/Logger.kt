@@ -38,9 +38,11 @@ object Logger {
 
     fun readLogs(): String = runCatching { sanitize(fileLogStore?.read().orEmpty()) }.getOrDefault("")
 
-    fun clearLogs() {
-        runCatching { fileLogStore?.clear() }
-    }
+    fun readLogPreview(maxBytes: Long = DEFAULT_LOG_PREVIEW_BYTES): String = runCatching {
+        sanitize(fileLogStore?.readTail(maxBytes).orEmpty())
+    }.getOrDefault("")
+
+    fun clearLogs(): Boolean = runCatching { fileLogStore?.clear() == true }.getOrDefault(false)
 
     fun exportFile() = exportFile(readLogs())
 
@@ -68,10 +70,16 @@ object Logger {
         .replace(WINDOWS_PATH_PATTERN, "<path>")
         .replace(EMAIL_PATTERN, "<email>")
         .replace(IPV4_PATTERN, "<ip>")
+        .replace(COLON_HOST_FIELD_PATTERN, "host=<host>")
+        .replace(HOST_FIELD_PATTERN, "host=<host>")
 
-    private val URL_PATTERN = Regex("""(?i)\b(?:https?|file|content)://\S+""")
+    private const val DEFAULT_LOG_PREVIEW_BYTES = 4L * 1024L
+
+    private val URL_PATTERN = Regex("""(?i)\b(?:https?|ftp|smb|file|content)://\S+""")
     private val ANDROID_PATH_PATTERN = Regex("""(?<![\w.])/(?:storage|sdcard|data|mnt|system|vendor|product|apex|proc|dev|cache)(?:/[^\s)\]}>,;]*)*""")
     private val WINDOWS_PATH_PATTERN = Regex("""(?i)\b[A-Z]:\\[^\s)\]}>,;]*""")
     private val EMAIL_PATTERN = Regex("""\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b""", RegexOption.IGNORE_CASE)
     private val IPV4_PATTERN = Regex("""\b(?:\d{1,3}\.){3}\d{1,3}\b""")
+    private val COLON_HOST_FIELD_PATTERN = Regex("""\bhost=[^\s]*:[^\s]+""")
+    private val HOST_FIELD_PATTERN = Regex("""\bhost=[^\s]+""")
 }

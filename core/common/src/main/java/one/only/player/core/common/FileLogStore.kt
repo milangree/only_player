@@ -2,6 +2,7 @@ package one.only.player.core.common
 
 import android.content.Context
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,11 +45,22 @@ class FileLogStore(
 
     fun read(): String = synchronized(lock) {
         if (!logFile.exists()) return@synchronized ""
+        trimToMaxSize()
         logFile.readText()
     }
 
-    fun clear() = synchronized(lock) {
-        if (logFile.exists()) logFile.writeText("")
+    fun readTail(maxBytes: Long): String = synchronized(lock) {
+        if (!logFile.exists()) return@synchronized ""
+        trimToMaxSize()
+        readTailText(maxBytes.coerceAtLeast(0L))
+    }
+
+    fun clear(): Boolean = synchronized(lock) {
+        val isCleared = runCatching {
+            if (logFile.exists()) logFile.writeText("")
+        }.isSuccess
+        if (isCleared) runCatching { exportLogFile.delete() }
+        isCleared
     }
 
     fun exportFile(content: String): File = synchronized(lock) {
@@ -60,13 +72,23 @@ class FileLogStore(
     private fun trimToMaxSize() {
         if (logFile.length() <= maxSizeBytes) return
 
-        val bytes = logFile.readBytes()
-        val startIndex = (bytes.size - maxSizeBytes).coerceAtLeast(0).toInt()
-        val tail = bytes.copyOfRange(startIndex, bytes.size).toString(StandardCharsets.UTF_8)
+        logFile.writeText(readTailText(maxSizeBytes))
+    }
+
+    private fun readTailText(maxBytes: Long): String {
+        if (maxBytes <= 0L) return ""
+
+        val length = logFile.length()
+        val start = (length - maxBytes).coerceAtLeast(0L)
+        val size = (length - start).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val bytes = ByteArray(size)
+        RandomAccessFile(logFile, "r").use { input ->
+            input.seek(start)
+            input.readFully(bytes)
+        }
+        val tail = bytes.toString(StandardCharsets.UTF_8)
         val firstLineBreakIndex = tail.indexOf('\n')
-        logFile.writeText(
-            if (firstLineBreakIndex >= 0) tail.drop(firstLineBreakIndex + 1) else tail,
-        )
+        return if (start > 0L && firstLineBreakIndex >= 0) tail.drop(firstLineBreakIndex + 1) else tail
     }
 
     companion object {

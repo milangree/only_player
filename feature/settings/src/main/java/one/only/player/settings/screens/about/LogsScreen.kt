@@ -62,14 +62,15 @@ fun LogsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var logs by remember { mutableStateOf("") }
+    var logPreview by remember { mutableStateOf("") }
+    var hasLogs by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     val saveLogsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain"),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val isSaved = context.saveLogsToUri(uri, logs)
+            val isSaved = context.saveLogsToUri(uri)
             Toast.makeText(
                 context,
                 context.getString(if (isSaved) R.string.logs_saved else R.string.logs_save_failed),
@@ -79,7 +80,9 @@ fun LogsScreen(
     }
 
     LaunchedEffect(Unit) {
-        logs = withContext(Dispatchers.IO) { Logger.readLogs() }
+        kotlinx.coroutines.delay(LOG_PREVIEW_LOAD_DELAY_MILLIS)
+        logPreview = withContext(Dispatchers.IO) { Logger.readLogPreview() }
+        hasLogs = logPreview.isNotBlank()
         isLoading = false
     }
 
@@ -99,16 +102,23 @@ fun LogsScreen(
         },
         bottomBar = {
             LogsBottomBar(
-                hasLogs = logs.isNotBlank(),
+                hasLogs = hasLogs,
                 onShareLogsClick = {
-                    scope.launch { context.shareLogs(logs) }
+                    scope.launch { context.shareLogs() }
                 },
                 onSaveLogsClick = { saveLogsLauncher.launch(LOG_EXPORT_FILE_NAME) },
                 onClearLogsClick = {
                     scope.launch {
-                        withContext(Dispatchers.IO) { Logger.clearLogs() }
-                        logs = ""
-                        Toast.makeText(context, context.getString(R.string.logs_cleared), Toast.LENGTH_SHORT).show()
+                        val isCleared = withContext(Dispatchers.IO) { Logger.clearLogs() }
+                        if (isCleared) {
+                            logPreview = ""
+                            hasLogs = false
+                        }
+                        Toast.makeText(
+                            context,
+                            context.getString(if (isCleared) R.string.logs_cleared else R.string.logs_clear_failed),
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
                 },
             )
@@ -142,10 +152,10 @@ fun LogsScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
             LogsTextContainer(
-                logs = when {
+                text = when {
                     isLoading -> stringResource(R.string.logs_loading)
-                    logs.isBlank() -> stringResource(R.string.no_logs)
-                    else -> logs
+                    !hasLogs -> stringResource(R.string.no_logs)
+                    else -> logPreview
                 },
             )
             Spacer(Modifier.height(8.dp))
@@ -155,7 +165,7 @@ fun LogsScreen(
 
 @Composable
 private fun LogsTextContainer(
-    logs: String,
+    text: String,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -166,7 +176,7 @@ private fun LogsTextContainer(
         ),
     ) {
         Text(
-            text = logs,
+            text = text,
             fontFamily = FontFamily.Monospace,
             style = MaterialTheme.typography.labelMedium,
             maxLines = LOG_PREVIEW_MAX_LINES,
@@ -248,8 +258,8 @@ private fun LogActionButton(
     }
 }
 
-private suspend fun Context.shareLogs(logs: String) {
-    val file = withContext(Dispatchers.IO) { Logger.exportFile(logs) }
+private suspend fun Context.shareLogs() {
+    val file = withContext(Dispatchers.IO) { Logger.exportFile() }
     if (file == null) {
         Toast.makeText(this, getString(R.string.logs_share_failed), Toast.LENGTH_SHORT).show()
         return
@@ -273,10 +283,8 @@ private suspend fun Context.shareLogs(logs: String) {
     }
 }
 
-private suspend fun Context.saveLogsToUri(
-    uri: android.net.Uri,
-    logs: String,
-): Boolean = withContext(Dispatchers.IO) {
+private suspend fun Context.saveLogsToUri(uri: android.net.Uri): Boolean = withContext(Dispatchers.IO) {
+    val logs = Logger.readLogs()
     runCatching {
         contentResolver.openOutputStream(uri)?.use { output ->
             output.write(logs.toByteArray())
@@ -285,4 +293,5 @@ private suspend fun Context.saveLogsToUri(
 }
 
 private const val LOG_EXPORT_FILE_NAME = "only_player_logs.txt"
-private const val LOG_PREVIEW_MAX_LINES = 300
+private const val LOG_PREVIEW_LOAD_DELAY_MILLIS = 350L
+private const val LOG_PREVIEW_MAX_LINES = 50
