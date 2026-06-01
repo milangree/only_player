@@ -1,12 +1,14 @@
-- 修复没有媒体时下拉刷新可能一直显示加载的问题
-- 移除媒体库启动时的列表和网格骨架屏，改用下拉刷新指示器显示加载状态
-- 修复播放器旋转后返回媒体库时位置丢失的问题
+- 改进关于页顶部布局，让应用名称完整显示，项目入口图标也更稳妥地待在右下角
+- 重新整理设置首页和分类页，让入口分组和页面标题更清楚
+- 优化开源库入口图标，让它和项目链接保持一致的视觉风格
+- 调整现代播放器底部时间显示，让已看时间和总时间分行显示，窄屏下按钮更稳定
 
 <details>
 <summary>English Version</summary>
 
-- Fix pull-to-refresh sometimes staying stuck when there are no videos
-- Remove list and grid skeleton screens from media library startup, using the pull-to-refresh indicator for loading instead
-- Fix losing the media library position after returning from the player following rotation
+- Improve the About header so the app name can be shown fully, with project link icons staying neatly in the lower-right corner
+- Reorganize the Settings landing page and subpages so groups and page titles are clearer
+- Refine the open-source libraries icon so it matches the visual style of the project links
+- Adjust the modern player time display so watched time and total time use separate lines, keeping buttons steadier on narrow screens
 
 </details>
