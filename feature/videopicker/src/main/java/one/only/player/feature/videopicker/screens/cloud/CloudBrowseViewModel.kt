@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.net.URLDecoder
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import one.only.player.core.common.Dispatcher
 import one.only.player.core.common.NextDispatchers
+import one.only.player.core.common.Utils
 import one.only.player.core.data.models.RemotePlaybackInfo
 import one.only.player.core.data.remote.FtpClient
 import one.only.player.core.data.remote.SmbClient
@@ -25,10 +27,13 @@ import one.only.player.core.data.repository.PreferencesRepository
 import one.only.player.core.data.repository.RemoteServerRepository
 import one.only.player.core.data.repository.buildRemoteFolderPlaybackAnchorKey
 import one.only.player.core.data.repository.buildRemotePlaybackStateKey
+import one.only.player.core.media.info.RemoteMediaInfo
+import one.only.player.core.media.info.RemoteMediaInfoReader
 import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.RemoteFile
 import one.only.player.core.model.RemoteServer
 import one.only.player.core.model.ServerProtocol
+import one.only.player.core.model.Video
 
 @HiltViewModel
 class CloudBrowseViewModel @Inject constructor(
@@ -39,6 +44,7 @@ class CloudBrowseViewModel @Inject constructor(
     private val webDavClient: WebDavClient,
     private val smbClient: SmbClient,
     private val ftpClient: FtpClient,
+    private val remoteMediaInfoReader: RemoteMediaInfoReader,
     @Dispatcher(NextDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -47,6 +53,8 @@ class CloudBrowseViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(CloudBrowseUiState())
     val uiState = _uiState.asStateFlow()
+    private var fileInfoJob: Job? = null
+    private var fileInfoRequestId = 0L
 
     init {
         viewModelScope.launch {
@@ -59,6 +67,8 @@ class CloudBrowseViewModel @Inject constructor(
 
     fun onEvent(event: CloudBrowseEvent) {
         when (event) {
+            is CloudBrowseEvent.LoadFileInfo -> loadFileInfo(event.file, event.documentUri)
+            CloudBrowseEvent.DismissFileInfo -> dismissFileInfo()
             CloudBrowseEvent.Retry -> loadCurrentDirectory(forceRefresh = true)
             CloudBrowseEvent.RefreshPlaybackStates -> loadPlaybackStates()
         }
@@ -296,6 +306,11 @@ class CloudBrowseViewModel @Inject constructor(
         return "${server.id}|${Uri.encode(_uiState.value.currentPath)}"
     }
 
+    fun buildFileDocumentId(file: RemoteFile): String? {
+        val server = _uiState.value.server ?: return null
+        return "${server.id}|${Uri.encode(file.path)}"
+    }
+
     fun buildAuthHeaders(file: RemoteFile): Map<String, String> {
         val server = _uiState.value.server ?: return emptyMap()
         return when (server.protocol) {
@@ -339,6 +354,109 @@ class CloudBrowseViewModel @Inject constructor(
         return extension.lowercase() in BROWSABLE_VIDEO_EXTENSIONS
     }
 
+    private fun loadFileInfo(
+        file: RemoteFile,
+        documentUri: Uri,
+    ) {
+        val server = _uiState.value.server ?: return
+        if (file.isDirectory) return
+        if (_uiState.value.isLoadingFileInfo) return
+
+        val requestId = ++fileInfoRequestId
+        _uiState.update {
+            it.copy(
+                isLoadingFileInfo = true,
+                infoVideo = null,
+            )
+        }
+
+        fileInfoJob = viewModelScope.launch {
+            val probeUrl = buildProbeUrl(server, file)
+            val mediaInfo = remoteMediaInfoReader.read(
+                probeUrl = probeUrl,
+                documentUri = documentUri,
+            ).getOrNull()
+            val video = file.toVideo(
+                documentUri = documentUri,
+                playUrl = buildPlayUrl(file),
+                mediaInfo = mediaInfo,
+            )
+            _uiState.update { currentState ->
+                if (requestId != fileInfoRequestId) {
+                    return@update currentState
+                }
+                fileInfoJob = null
+                currentState.copy(
+                    isLoadingFileInfo = false,
+                    infoVideo = video,
+                )
+            }
+        }
+    }
+
+    private fun dismissFileInfo() {
+        fileInfoRequestId++
+        fileInfoJob?.cancel()
+        fileInfoJob = null
+        _uiState.update {
+            it.copy(
+                isLoadingFileInfo = false,
+                infoVideo = null,
+            )
+        }
+    }
+
+    private fun buildProbeUrl(
+        server: RemoteServer,
+        file: RemoteFile,
+    ): String? {
+        val playUrl = when (server.protocol) {
+            ServerProtocol.WEBDAV -> webDavClient.buildFileUrl(server, file.path)
+            ServerProtocol.FTP -> ftpClient.buildFileUrl(server, file.path)
+            ServerProtocol.SMB -> return null
+        }
+        if (server.username.isBlank()) return playUrl
+
+        val uri = Uri.parse(playUrl)
+        val authority = uri.encodedAuthority ?: return playUrl
+        val userInfo = "${Uri.encode(server.username)}:${Uri.encode(server.password)}"
+        return uri.buildUpon()
+            .encodedAuthority("$userInfo@$authority")
+            .build()
+            .toString()
+    }
+
+    private fun RemoteFile.toVideo(
+        documentUri: Uri,
+        playUrl: String?,
+        mediaInfo: RemoteMediaInfo?,
+    ): Video {
+        val videoStream = mediaInfo?.videoStream
+        val duration = mediaInfo?.duration?.takeIf { it > 0 } ?: 0L
+        return Video(
+            id = path.hashCode().toLong(),
+            path = path,
+            parentPath = parentPath(),
+            duration = duration,
+            uriString = playUrl ?: documentUri.toString(),
+            nameWithExtension = name,
+            width = videoStream?.frameWidth ?: 0,
+            height = videoStream?.frameHeight ?: 0,
+            size = size,
+            formattedDuration = duration.takeIf { it > 0 }?.let(Utils::formatDurationMillis).orEmpty(),
+            formattedFileSize = Utils.formatFileSize(size),
+            format = mediaInfo?.format ?: contentType.takeIf { it.isNotBlank() },
+            videoStream = videoStream,
+            audioStreams = mediaInfo?.audioStreams.orEmpty(),
+            subtitleStreams = mediaInfo?.subtitleStreams.orEmpty(),
+        )
+    }
+
+    private fun RemoteFile.parentPath(): String {
+        val parentPath = path.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
+        return parentPath.ifBlank { "/" }
+    }
+
     // PROPFIND href 可能是 URL 编码的，server.path 是用户输入的原始文本
     private fun isAtServerRoot(currentPath: String, serverPath: String): Boolean {
         val decodedCurrent = URLDecoder.decode(currentPath.removeSuffix("/"), "UTF-8")
@@ -378,9 +496,17 @@ data class CloudBrowseUiState(
     val playbackStates: Map<String, RemotePlaybackInfo> = emptyMap(),
     val restoreTargetFilePath: String? = null,
     val preferences: ApplicationPreferences = ApplicationPreferences(),
+    val isLoadingFileInfo: Boolean = false,
+    val infoVideo: Video? = null,
 )
 
 sealed interface CloudBrowseEvent {
+    data class LoadFileInfo(
+        val file: RemoteFile,
+        val documentUri: Uri,
+    ) : CloudBrowseEvent
+
+    data object DismissFileInfo : CloudBrowseEvent
     data object Retry : CloudBrowseEvent
     data object RefreshPlaybackStates : CloudBrowseEvent
 }
