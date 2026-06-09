@@ -1,8 +1,8 @@
-- 新增云端视频的信息入口，长按 WebDAV 文件后可从右上角菜单查看时长、格式、分辨率和编码等参数
+- 修复 HLS 播放时字幕和音轨列表偶尔选错的问题，遇到隐藏或不支持的轨道时也能切到正确项目
 
 <details>
 <summary>English Version</summary>
 
-- Add an info entry for cloud videos, letting WebDAV files show duration, format, resolution, codec, and more from the long-press top-right menu
+- Fix occasional wrong subtitle or audio track selection during HLS playback, keeping the chosen item correct even when hidden or unsupported tracks exist
 
 </details>
