@@ -12,6 +12,7 @@ object PlayerDebugCommandBridge {
     const val ACTION_BACK = "back"
     const val ACTION_ROTATE = "rotate"
     const val ACTION_TOGGLE_AMBIENCE = "toggle_ambience"
+    const val ACTION_TOGGLE_MIRROR = "toggle_mirror"
     const val ACTION_SHOW_CONTROLS = "show_controls"
     const val ACTION_HIDE_CONTROLS = "hide_controls"
     const val ACTION_SHOW_PLAYLIST = "show_playlist"

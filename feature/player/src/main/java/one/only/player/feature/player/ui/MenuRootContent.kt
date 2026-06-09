@@ -27,11 +27,13 @@ import one.only.player.core.ui.designsystem.NextIcons
 fun MenuRootContent(
     isLockEnabled: Boolean,
     isAmbienceModeEnabled: Boolean,
+    isVideoMirrored: Boolean,
     isPipSupported: Boolean,
     isTakingScreenshot: Boolean,
     onNavigate: (MenuRoute) -> Unit,
     onLockClick: () -> Unit,
     onAmbienceClick: () -> Unit,
+    onMirrorVideoClick: () -> Unit,
     onPictureInPictureClick: () -> Unit,
     onScreenshotClick: () -> Unit,
     onPlayInBackgroundClick: () -> Unit,
@@ -93,6 +95,13 @@ fun MenuRootContent(
             testTag = "menu_item_ambience",
             onClick = onAmbienceClick,
             isSelected = isAmbienceModeEnabled,
+        )
+        MenuItemRow(
+            icon = NextIcons.Size,
+            text = stringResource(R.string.mirror_video),
+            testTag = "menu_item_mirror_video",
+            onClick = onMirrorVideoClick,
+            isSelected = isVideoMirrored,
         )
         if (isPipSupported) {
             MenuItemRow(

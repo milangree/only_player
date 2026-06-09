@@ -61,6 +61,7 @@ fun PlayerContentFrame(
     decoderPriority: DecoderPriority,
     isGesturesEnabled: Boolean = true,
     shouldUseTextureView: Boolean = false,
+    isVideoMirrored: Boolean = false,
 ) {
     // decoder 切换重建 SurfaceView，重新绑定视频输出
     var surfaceRefreshKey by remember { mutableIntStateOf(0) }
@@ -116,6 +117,7 @@ fun PlayerContentFrame(
             }
             val surfaceWidthDp = with(density) { videoWidth.toDp() }
             val surfaceHeightDp = with(density) { videoHeight.toDp() }
+            val mirrorScaleX = if (isVideoMirrored) -1f else 1f
 
             PlayerSurface(
                 player = player,
@@ -123,7 +125,7 @@ fun PlayerContentFrame(
                 modifier = Modifier
                     .requiredSize(surfaceWidthDp, surfaceHeightDp)
                     .graphicsLayer {
-                        scaleX = baseScaleX * videoZoomAndContentScaleState.zoom
+                        scaleX = baseScaleX * videoZoomAndContentScaleState.zoom * mirrorScaleX
                         scaleY = baseScaleY * videoZoomAndContentScaleState.zoom
                         translationX = videoZoomAndContentScaleState.offset.x
                         translationY = videoZoomAndContentScaleState.offset.y
@@ -136,7 +138,7 @@ fun PlayerContentFrame(
                             bounds.right.toInt(),
                             bounds.bottom.toInt(),
                         )
-                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:$surfaceType:$surfaceRefreshKey"
+                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:$surfaceType:$surfaceRefreshKey:$isVideoMirrored"
                         if (key != lastLoggedSurfaceLayout) {
                             lastLoggedSurfaceLayout = key
                             Logger.info(

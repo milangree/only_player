@@ -83,6 +83,7 @@
     <string name="light_theme">Light theme</string>
     <string name="dark_theme">Dark theme</string>
     <string name="video_zoom">Video zoom</string>
+    <string name="mirror_video">Mirror video</string>
     <string name="dynamic_theme">Dynamic color theme</string>
     <string name="dynamic_theme_description">Apply colors from system wallpaper to the application theme</string>
     <string name="controls_lock">Lock controls</string>

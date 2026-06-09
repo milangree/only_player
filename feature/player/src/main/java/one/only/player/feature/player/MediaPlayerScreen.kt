@@ -339,6 +339,7 @@ internal fun MediaPlayerScreen(
     var videoFiltersInitialPreferences by remember { mutableStateOf<PlayerPreferences?>(null) }
     var subtitleStylePreviewPreferences by remember { mutableStateOf<PlayerPreferences?>(null) }
     var isAmbienceModeEnabled by remember { mutableStateOf(false) }
+    var isVideoMirrored by remember { mutableStateOf(false) }
     val activePlayerPreferences = subtitleStylePreviewPreferences ?: playerPreferences
     val videoFiltersUnavailableMessage = stringResource(coreUiR.string.video_filters_unavailable_software_decoder)
     fun restoreVideoFiltersPreview() {
@@ -678,6 +679,7 @@ internal fun MediaPlayerScreen(
             PlayerDebugCommandBridge.ACTION_BACK -> onBackClick()
             PlayerDebugCommandBridge.ACTION_ROTATE -> rotationState.rotate()
             PlayerDebugCommandBridge.ACTION_TOGGLE_AMBIENCE -> toggleAmbienceMode()
+            PlayerDebugCommandBridge.ACTION_TOGGLE_MIRROR -> isVideoMirrored = !isVideoMirrored
             PlayerDebugCommandBridge.ACTION_SHOW_CONTROLS -> controlsVisibilityState.showControls()
             PlayerDebugCommandBridge.ACTION_HIDE_CONTROLS -> controlsVisibilityState.hideControls()
             PlayerDebugCommandBridge.ACTION_SHOW_PLAYLIST -> openOverlayPanel(OverlayView.PLAYLIST)
@@ -795,7 +797,8 @@ internal fun MediaPlayerScreen(
                         externalSubtitleFontSource = externalSubtitleFontSource,
                     ),
                     decoderPriority = playerPreferences.decoderPriority,
-                    shouldUseTextureView = isAmbienceModeEnabled,
+                    shouldUseTextureView = isAmbienceModeEnabled || isVideoMirrored,
+                    isVideoMirrored = isVideoMirrored,
                 )
 
                 AnimatedVisibility(
@@ -1329,6 +1332,7 @@ internal fun MediaPlayerScreen(
                         MenuRoute.Root -> MenuRootContent(
                             isLockEnabled = controlsVisibilityState.isControlsLocked,
                             isAmbienceModeEnabled = isAmbienceModeEnabled,
+                            isVideoMirrored = isVideoMirrored,
                             isPipSupported = pictureInPictureState.isPipSupported,
                             isTakingScreenshot = isTakingScreenshot,
                             onNavigate = ::navigateToMenuRoute,
@@ -1339,6 +1343,10 @@ internal fun MediaPlayerScreen(
                             },
                             onAmbienceClick = {
                                 toggleAmbienceMode(shouldShowControls = false)
+                                dismissOverlay()
+                            },
+                            onMirrorVideoClick = {
+                                isVideoMirrored = !isVideoMirrored
                                 dismissOverlay()
                             },
                             onPictureInPictureClick = {

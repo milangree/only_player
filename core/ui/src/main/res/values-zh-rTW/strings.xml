@@ -167,6 +167,7 @@
     <string name="appearance_description">調整此應用程式以符合您的喜好</string>
     <string name="enable">啟用</string>
     <string name="video_zoom">影片縮放</string>
+    <string name="mirror_video">鏡像影片</string>
     <string name="media_library">媒體庫</string>
     <string name="disable">停用</string>
     <string name="play_url">輸入影片 URL 進行播放</string>

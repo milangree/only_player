@@ -66,6 +66,7 @@
     <string name="smallest">最小</string>
     <string name="largest">最大</string>
     <string name="video_zoom">视频缩放</string>
+    <string name="mirror_video">镜像视频</string>
     <string name="dynamic_theme_description">将系统壁纸的颜色应用到应用主题中</string>
     <string name="controls_lock">锁定控件</string>
     <string name="controls_unlock">解锁控件</string>
