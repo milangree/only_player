@@ -736,6 +736,30 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LandscapePlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|keyboard|keyboardHidden|navigation"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:screenOrientation="sensorLandscape"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/OnlyPlayer"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="o" />
+
+        <activity
+            android:name=".PortraitPlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|keyboard|keyboardHidden|navigation"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:screenOrientation="sensorPortrait"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/OnlyPlayer"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="o" />
+
         <service
             android:name=".service.PlayerService"
             android:exported="true"

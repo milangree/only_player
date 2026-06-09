@@ -60,7 +60,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import one.only.player.core.common.Logger
@@ -166,10 +165,11 @@ internal fun buildPlaybackPlaylist(
 
 @SuppressLint("UnsafeOptInUsageError")
 @AndroidEntryPoint
-class PlayerActivity : AppCompatActivity() {
+open class PlayerActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "PlayerActivity"
+        const val EXTRA_LAUNCH_ORIENTATION = "one.only.player.extra.LAUNCH_ORIENTATION"
 
         private val SUBTITLE_DOCUMENT_MIME_TYPES = arrayOf(
             "application/octet-stream",
@@ -226,12 +226,16 @@ class PlayerActivity : AppCompatActivity() {
 
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val launchOrientation = intent.launchOrientationExtra()
+        launchOrientation?.let(::applyRequestedOrientation)
         super.onCreate(savedInstanceState)
         applyPrivacyProtection(
             shouldPreventScreenshots = viewModel.uiState.value.shouldPreventScreenshots,
             shouldHideInRecents = viewModel.uiState.value.shouldHideInRecents,
         )
-        presetVideoOrientation()
+        if (launchOrientation == null) {
+            applyConfiguredOrientation()
+        }
         val systemBarScrim = resolvePrivacyPreviewScrim(
             shouldHideInRecents = viewModel.uiState.value.shouldHideInRecents,
         )
@@ -754,6 +758,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.data != null) {
+            applyLaunchOrientation(intent)
             setIntent(intent)
             isIntentNew = true
             if (mediaController != null) {
@@ -874,31 +879,39 @@ class PlayerActivity : AppCompatActivity() {
         onWindowAttributesChangedListener.remove(listener)
     }
 
-    // 在 controller 连接前根据数据库预设方向，避免竖屏闪烁
-    private fun presetVideoOrientation() {
-        val prefs = playerPreferences ?: return
-        val rememberedOrientation = prefs.lastPlayerScreenOrientation
-            ?.takeIf { prefs.shouldRememberPlayerScreenOrientation }
-            ?.toActivityOrientation()
-        if (rememberedOrientation != null) {
-            requestedOrientation = rememberedOrientation
+    // 启动参数是播放器首屏方向的唯一前置来源。
+    private fun applyLaunchOrientation(launchIntent: Intent) {
+        launchIntent.launchOrientationExtra()?.let {
+            applyRequestedOrientation(it)
             return
         }
-        if (prefs.playerScreenOrientation != ScreenOrientation.VIDEO_ORIENTATION) return
-        val uri = intent.data ?: return
-        val orientation = runBlocking(Dispatchers.IO) {
-            val video = viewModel.getVideoByUri(uri.toString()) ?: return@runBlocking null
-            if (video.width <= 0 || video.height <= 0) return@runBlocking null
 
-            if (video.height >= video.width) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            }
-        } ?: return
+        applyConfiguredOrientation()
+    }
 
-        if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+    private fun applyConfiguredOrientation() {
+        val prefs = playerPreferences ?: return
+        if (prefs.playerScreenOrientation == ScreenOrientation.VIDEO_ORIENTATION) return
+
+        val orientation = prefs.lastPlayerScreenOrientation
+            ?.takeIf { prefs.shouldRememberPlayerScreenOrientation }
+            ?.toActivityOrientation()
+            ?: prefs.playerScreenOrientation.toActivityOrientation()
+        applyRequestedOrientation(orientation)
+    }
+
+    private fun Intent.launchOrientationExtra(): Int? = getIntExtra(
+        EXTRA_LAUNCH_ORIENTATION,
+        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+    ).takeIf { it != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+
+    private fun applyRequestedOrientation(orientation: Int) {
+        if (requestedOrientation != orientation) {
             requestedOrientation = orientation
         }
     }
 }
+
+class LandscapePlayerActivity : PlayerActivity()
+
+class PortraitPlayerActivity : PlayerActivity()

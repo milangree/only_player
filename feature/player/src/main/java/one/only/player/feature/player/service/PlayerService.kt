@@ -13,7 +13,6 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.ParserException
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -33,7 +32,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
-import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -941,23 +939,6 @@ class PlayerService : MediaSessionService() {
         }
     }
 
-    // 预热 MediaCodecUtil 解码器缓存，避免首次播放阻塞在 codec 枚举
-    private fun warmUpCodecCache() {
-        // 仅预热最常用的 MIME，减少 synchronized 占锁时间
-        val mimeTypes = listOf(
-            MimeTypes.VIDEO_H265,
-            MimeTypes.VIDEO_H264,
-            MimeTypes.AUDIO_AAC,
-        )
-        for (mimeType in mimeTypes) {
-            try {
-                MediaCodecUtil.getDecoderInfos(mimeType, false, false)
-            } catch (_: MediaCodecUtil.DecoderQueryException) {
-                // 仅为预热缓存
-            }
-        }
-    }
-
     // 扫描 MP4 顶层 atom，检测连续出现的 moov box
     private fun detectDuplicateMoov(uri: Uri): SkipRegion? {
         try {
@@ -1474,7 +1455,6 @@ class PlayerService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        serviceScope.launch(Dispatchers.IO) { warmUpCodecCache() }
         serviceScope.launch {
             preferencesRepository.playerPreferences
                 .distinctUntilChanged { old, new -> old.decoderPriority == new.decoderPriority }

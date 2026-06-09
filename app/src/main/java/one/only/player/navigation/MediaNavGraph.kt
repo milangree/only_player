@@ -2,12 +2,21 @@ package one.only.player.navigation
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.net.Uri
+import androidx.core.net.toUri
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.navigation
 import kotlinx.serialization.Serializable
 import one.only.player.MainActivity
+import one.only.player.core.model.PlayerPreferences
+import one.only.player.core.model.ScreenOrientation
+import one.only.player.core.model.Video
+import one.only.player.feature.player.LandscapePlayerActivity
 import one.only.player.feature.player.PlayerActivity
+import one.only.player.feature.player.PortraitPlayerActivity
+import one.only.player.feature.player.extensions.toActivityOrientation
 import one.only.player.feature.player.service.PlayerService
 import one.only.player.feature.videopicker.navigation.MediaPickerRoute
 import one.only.player.feature.videopicker.navigation.MediaPickerScreenMode
@@ -33,12 +42,14 @@ fun NavGraphBuilder.mediaNavGraph(
                 navController.popBackStack(MediaPickerRoute(), inclusive = false)
             },
             onSettingsClick = navController::navigateToSettings,
-            onPlayVideo = { uri ->
-                val intent = Intent(context, PlayerActivity::class.java).apply {
-                    action = Intent.ACTION_VIEW
-                    data = uri
-                }
-                context.startActivity(intent)
+            onPlayVideo = { video, playerPreferences ->
+                context.startPlayerActivity(
+                    uri = video.uriString.toUri(),
+                    launchOrientation = video.resolveLaunchOrientation(playerPreferences),
+                )
+            },
+            onPlayUri = { uri ->
+                context.startPlayerActivity(uri = uri)
             },
             onFolderClick = { folderPath, screenMode ->
                 navController.navigateToMediaPickerScreen(
@@ -58,12 +69,11 @@ fun NavGraphBuilder.mediaNavGraph(
 
         searchScreen(
             onNavigateUp = navController::navigateUp,
-            onPlayVideo = { uri ->
-                val intent = Intent(context, PlayerActivity::class.java).apply {
-                    action = Intent.ACTION_VIEW
-                    data = uri
-                }
-                context.startActivity(intent)
+            onPlayVideo = { video, playerPreferences ->
+                context.startPlayerActivity(
+                    uri = video.uriString.toUri(),
+                    launchOrientation = video.resolveLaunchOrientation(playerPreferences),
+                )
             },
             onFolderClick = { folderPath ->
                 navController.navigateToMediaPickerScreen(
@@ -72,5 +82,50 @@ fun NavGraphBuilder.mediaNavGraph(
                 )
             },
         )
+    }
+}
+
+private fun Context.startPlayerActivity(
+    uri: Uri,
+    launchOrientation: Int? = null,
+) {
+    val activityClass = launchOrientation.playerActivityClass()
+    val intent = Intent(this, activityClass).apply {
+        action = Intent.ACTION_VIEW
+        data = uri
+        launchOrientation?.takeIf { activityClass == PlayerActivity::class.java }?.let {
+            putExtra(PlayerActivity.EXTRA_LAUNCH_ORIENTATION, it)
+        }
+    }
+    startActivity(intent)
+}
+
+private fun Int?.playerActivityClass(): Class<out PlayerActivity> = when (this) {
+    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> LandscapePlayerActivity::class.java
+    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT -> PortraitPlayerActivity::class.java
+    else -> PlayerActivity::class.java
+}
+
+private fun Video.resolveLaunchOrientation(playerPreferences: PlayerPreferences): Int? {
+    val videoOrientation = resolveVideoOrientation()
+    if (playerPreferences.playerScreenOrientation == ScreenOrientation.VIDEO_ORIENTATION) {
+        return videoOrientation
+    }
+
+    val rememberedOrientation = playerPreferences.lastPlayerScreenOrientation
+        ?.takeIf { playerPreferences.shouldRememberPlayerScreenOrientation }
+        ?.toActivityOrientation()
+    if (rememberedOrientation != null) return rememberedOrientation
+
+    return playerPreferences.playerScreenOrientation.toActivityOrientation()
+}
+
+private fun Video.resolveVideoOrientation(): Int? {
+    if (width <= 0 || height <= 0) return null
+
+    return if (height >= width) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 }

@@ -24,6 +24,7 @@ import one.only.player.core.media.sync.MediaInfoSynchronizer
 import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
 import one.only.player.core.model.MediaViewMode
+import one.only.player.core.model.PlayerPreferences
 import one.only.player.feature.videopicker.screens.mediapicker.MediaPickerSnapshotCache
 
 @HiltViewModel
@@ -45,6 +46,7 @@ class SearchViewModel @Inject constructor(
         collectSearchHistory()
         collectPopularFolders()
         collectPreferences()
+        collectPlayerPreferences()
         collectSearchResults()
     }
 
@@ -68,6 +70,14 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { prefs ->
                 uiStateInternal.update { it.copy(preferences = prefs) }
+            }
+        }
+    }
+
+    private fun collectPlayerPreferences() {
+        viewModelScope.launch {
+            preferencesRepository.playerPreferences.collect { prefs ->
+                uiStateInternal.update { it.copy(playerPreferences = prefs) }
             }
         }
     }
@@ -162,6 +172,7 @@ data class SearchUiState(
     val searchResults: SearchResults = SearchResults(),
     val isSearching: Boolean = false,
     val preferences: ApplicationPreferences = ApplicationPreferences(),
+    val playerPreferences: PlayerPreferences = PlayerPreferences(),
 )
 
 sealed interface SearchUiEvent {

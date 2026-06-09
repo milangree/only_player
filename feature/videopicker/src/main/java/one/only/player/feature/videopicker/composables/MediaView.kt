@@ -31,6 +31,7 @@ import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
 import one.only.player.core.model.MediaLayoutMode
 import one.only.player.core.model.MediaViewMode
+import one.only.player.core.model.Video
 import one.only.player.core.ui.R
 import one.only.player.core.ui.components.ListSectionTitle
 import one.only.player.core.ui.extensions.plus
@@ -47,7 +48,7 @@ fun MediaView(
     selectionManager: SelectionManager = rememberSelectionManager(),
     lazyGridState: LazyGridState = rememberLazyGridState(),
     onFolderClick: (Folder) -> Unit,
-    onVideoClick: (Uri) -> Unit,
+    onVideoClick: (Video) -> Unit,
     onVideoLoaded: (Uri) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -152,7 +153,7 @@ fun MediaView(
                             haptic.performHapticFeedback(HapticFeedbackType.VirtualKey)
                             selectionManager.toggleVideoSelection(video)
                         } else {
-                            onVideoClick(video.uriString.toUri())
+                            onVideoClick(video)
                         }
                     },
                     onLongClick = {

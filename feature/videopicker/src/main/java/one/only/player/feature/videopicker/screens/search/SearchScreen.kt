@@ -59,6 +59,7 @@ import one.only.player.core.domain.asRootFolder
 import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
 import one.only.player.core.model.MediaLayoutMode
+import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.Video
 import one.only.player.core.ui.R
 import one.only.player.core.ui.components.ListSectionTitle
@@ -75,7 +76,7 @@ import one.only.player.feature.videopicker.composables.MediaView
 @Composable
 fun SearchRoute(
     viewModel: SearchViewModel = hiltViewModel(),
-    onPlayVideo: (uri: Uri) -> Unit,
+    onPlayVideo: (video: Video, playerPreferences: PlayerPreferences) -> Unit,
     onFolderClick: (folderPath: String) -> Unit,
     onNavigateUp: () -> Unit,
 ) {
@@ -85,7 +86,7 @@ fun SearchRoute(
         uiState = uiState,
         onNavigateUp = onNavigateUp,
         onFolderClick = { folder -> onFolderClick(folder.path) },
-        onVideoClick = onPlayVideo,
+        onVideoClick = { video -> onPlayVideo(video, uiState.playerPreferences) },
         onEvent = viewModel::onEvent,
     )
 }
@@ -96,7 +97,7 @@ internal fun SearchScreen(
     uiState: SearchUiState,
     onNavigateUp: () -> Unit = {},
     onFolderClick: (Folder) -> Unit = {},
-    onVideoClick: (Uri) -> Unit = {},
+    onVideoClick: (Video) -> Unit = {},
     onEvent: (SearchUiEvent) -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -368,7 +369,7 @@ private fun SearchResultsContent(
     isSearching: Boolean,
     contentPadding: PaddingValues = PaddingValues(),
     onFolderClick: (Folder) -> Unit,
-    onVideoClick: (Uri) -> Unit,
+    onVideoClick: (Video) -> Unit,
     onVideoLoaded: (Uri) -> Unit,
 ) {
     AnimatedVisibility(

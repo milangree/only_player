@@ -73,6 +73,7 @@ import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
 import one.only.player.core.model.MediaLayoutMode
 import one.only.player.core.model.MediaViewMode
+import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.Video
 import one.only.player.core.ui.R
 import one.only.player.core.ui.base.DataState
@@ -102,7 +103,8 @@ import one.only.player.feature.videopicker.state.rememberSelectionManager
 @Composable
 fun MediaPickerRoute(
     viewModel: MediaPickerViewModel = hiltViewModel(),
-    onPlayVideo: (uri: Uri) -> Unit,
+    onPlayVideo: (video: Video, playerPreferences: PlayerPreferences) -> Unit,
+    onPlayUri: (uri: Uri) -> Unit,
     onFolderClick: (folderPath: String, screenMode: MediaPickerScreenMode) -> Unit,
     onRecycleBinClick: () -> Unit,
     onSearchClick: () -> Unit,
@@ -117,6 +119,7 @@ fun MediaPickerRoute(
     MediaPickerScreen(
         uiState = uiState,
         onPlayVideo = onPlayVideo,
+        onPlayUri = onPlayUri,
         onNavigateUp = onNavigateUp,
         onNavigateHome = onNavigateHome,
         onFolderClick = onFolderClick,
@@ -145,7 +148,8 @@ internal fun MediaPickerScreen(
     uiState: MediaPickerUiState,
     onNavigateUp: () -> Unit = {},
     onNavigateHome: () -> Unit = {},
-    onPlayVideo: (Uri) -> Unit = {},
+    onPlayVideo: (Video, PlayerPreferences) -> Unit = { _, _ -> },
+    onPlayUri: (Uri) -> Unit = {},
     onFolderClick: (String, MediaPickerScreenMode) -> Unit = { _, _ -> },
     onRecycleBinClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
@@ -161,7 +165,7 @@ internal fun MediaPickerScreen(
     var restoredPlaybackAnchor by rememberSaveable { mutableStateOf<String?>(null) }
     val selectVideoFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
-        onResult = { it?.let { onPlayVideo(it) } },
+        onResult = { it?.let { onPlayUri(it) } },
     )
 
     var shouldShowQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
@@ -210,7 +214,7 @@ internal fun MediaPickerScreen(
         !isMoveMode -> false
         !isLibraryMode -> false
         uiState.folderPath == null -> false
-        else -> uiState.moveSelection?.canMoveTo(uiState.folderPath) == true
+        else -> uiState.moveSelection.canMoveTo(uiState.folderPath)
     }
     val moveProgress = uiState.moveProgress
 
@@ -460,7 +464,7 @@ internal fun MediaPickerScreen(
                                             testTag = "item_main_menu_recently_played",
                                             onClick = {
                                                 shouldShowMainMenu = false
-                                                onPlayVideo(video.uriString.toUri())
+                                                onPlayVideo(video, uiState.playerPreferences)
                                             },
                                         )
                                     }
@@ -566,8 +570,8 @@ internal fun MediaPickerScreen(
                                             onEvent(MediaPickerUiEvent.CacheFolderSnapshot(it))
                                             onFolderClick(it.path, uiState.screenMode)
                                         },
-                                        onVideoClick = { videoUri ->
-                                            if (!isMoveMode) onPlayVideo(videoUri)
+                                        onVideoClick = { video ->
+                                            if (!isMoveMode) onPlayVideo(video, uiState.playerPreferences)
                                         },
                                         selectionManager = selectionManager,
                                         lazyGridState = lazyGridState,
@@ -655,7 +659,7 @@ internal fun MediaPickerScreen(
     if (shouldShowUrlDialog) {
         NetworkUrlDialog(
             onDismiss = { shouldShowUrlDialog = false },
-            onDone = { onPlayVideo(it.toUri()) },
+            onDone = { onPlayUri(it.toUri()) },
         )
     }
 

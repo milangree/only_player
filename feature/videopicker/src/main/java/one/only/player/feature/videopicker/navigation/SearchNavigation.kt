@@ -1,11 +1,12 @@
 package one.only.player.feature.videopicker.navigation
 
-import android.net.Uri
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import kotlinx.serialization.Serializable
+import one.only.player.core.model.PlayerPreferences
+import one.only.player.core.model.Video
 import one.only.player.feature.videopicker.screens.search.SearchRoute
 
 @Serializable
@@ -17,7 +18,7 @@ fun NavController.navigateToSearch(navOptions: NavOptions? = null) {
 
 fun NavGraphBuilder.searchScreen(
     onNavigateUp: () -> Unit,
-    onPlayVideo: (uri: Uri) -> Unit,
+    onPlayVideo: (video: Video, playerPreferences: PlayerPreferences) -> Unit,
     onFolderClick: (folderPath: String) -> Unit,
 ) {
     composable<SearchRoute> {

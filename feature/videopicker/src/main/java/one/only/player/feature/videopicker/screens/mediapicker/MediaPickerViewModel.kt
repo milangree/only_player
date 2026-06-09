@@ -26,6 +26,7 @@ import one.only.player.core.media.sync.MediaInfoSynchronizer
 import one.only.player.core.media.sync.MediaSynchronizer
 import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.Folder
+import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.Video
 import one.only.player.core.ui.base.DataState
 import one.only.player.feature.videopicker.navigation.FolderArgs
@@ -52,6 +53,7 @@ class MediaPickerViewModel @Inject constructor(
     private var shouldCancelMoveSelection = false
 
     private val initialPreferences = preferencesRepository.applicationPreferences.value
+    private val initialPlayerPreferences = preferencesRepository.playerPreferences.value
     private val initialMediaDataState: DataState<Folder?> = snapshotCache.get(
         folderPath = folderPath,
         preferences = initialPreferences,
@@ -67,6 +69,7 @@ class MediaPickerViewModel @Inject constructor(
             folderName = folderPath?.let { File(folderPath).prettyName },
             mediaDataState = initialMediaDataState,
             preferences = initialPreferences,
+            playerPreferences = initialPlayerPreferences,
             screenMode = screenMode,
         ),
     )
@@ -99,6 +102,16 @@ class MediaPickerViewModel @Inject constructor(
                 uiStateInternal.update { currentState ->
                     currentState.copy(
                         preferences = it,
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            preferencesRepository.playerPreferences.collect {
+                uiStateInternal.update { currentState ->
+                    currentState.copy(
+                        playerPreferences = it,
                     )
                 }
             }
@@ -319,6 +332,7 @@ data class MediaPickerUiState(
     val mediaDataState: DataState<Folder?> = DataState.Loading,
     val isRefreshing: Boolean = false,
     val preferences: ApplicationPreferences = ApplicationPreferences(),
+    val playerPreferences: PlayerPreferences = PlayerPreferences(),
     val screenMode: MediaPickerScreenMode = MediaPickerScreenMode.LIBRARY,
     val moveSelection: MediaPickerMoveSelection? = null,
     val isMovingSelection: Boolean = false,

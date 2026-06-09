@@ -7,6 +7,8 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import kotlinx.serialization.Serializable
+import one.only.player.core.model.PlayerPreferences
+import one.only.player.core.model.Video
 import one.only.player.feature.videopicker.screens.mediapicker.MediaPickerRoute
 
 internal const val folderIdArg = "folderId"
@@ -58,7 +60,8 @@ fun NavController.navigateToRecycleBinScreen(navOptions: NavOptions? = null) {
 fun NavGraphBuilder.mediaPickerScreen(
     onNavigateUp: () -> Unit,
     onNavigateHome: () -> Unit,
-    onPlayVideo: (uri: Uri) -> Unit,
+    onPlayVideo: (video: Video, playerPreferences: PlayerPreferences) -> Unit,
+    onPlayUri: (uri: Uri) -> Unit,
     onFolderClick: (folderPath: String, screenMode: MediaPickerScreenMode) -> Unit,
     onRecycleBinClick: () -> Unit,
     onSearchClick: () -> Unit,
@@ -69,6 +72,7 @@ fun NavGraphBuilder.mediaPickerScreen(
     composable<MediaPickerRoute> {
         MediaPickerRoute(
             onPlayVideo = onPlayVideo,
+            onPlayUri = onPlayUri,
             onNavigateUp = onNavigateUp,
             onNavigateHome = onNavigateHome,
             onFolderClick = onFolderClick,
