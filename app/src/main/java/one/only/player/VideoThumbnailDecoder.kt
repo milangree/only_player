@@ -3,6 +3,7 @@ package one.only.player
 import android.content.ContentUris
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.provider.MediaStore
 import android.util.Size
 import androidx.core.graphics.drawable.toDrawable
@@ -36,8 +37,48 @@ class VideoThumbnailDecoder(
     companion object {
         // 缩略图最大尺寸，避免 4K 全分辨率 Bitmap 占用过多内存
         private const val MAX_THUMBNAIL_SIZE = 512
-        private const val THUMBNAIL_CACHE_VERSION = 2
+        private const val THUMBNAIL_CACHE_VERSION = 3
         private val mediaInfoSemaphore = Semaphore(1)
+    }
+
+    // 内嵌封面表达作者意图，优先级高于抽帧。
+    private fun tryLoadEmbeddedArtwork(): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            val metadata = source.metadata
+            val mediaInfoSource = when {
+                metadata is ContentMetadata -> {
+                    val uri = metadata.uri.toAndroidUri()
+                    retriever.setDataSource(options.context, uri)
+                    "contentUri=$uri"
+                }
+                source.fileSystem === FileSystem.SYSTEM -> {
+                    val path = source.file().toFile().path
+                    retriever.setDataSource(path)
+                    "filePath=$path"
+                }
+                else -> return null
+            }
+
+            val artworkData = retriever.embeddedPicture ?: return null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(artworkData, 0, artworkData.size, bounds)
+            BitmapFactory.decodeByteArray(
+                artworkData,
+                0,
+                artworkData.size,
+                BitmapFactory.Options().apply {
+                    inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight)
+                },
+            ).also { bitmap ->
+                logThumbnail { "embeddedArtwork result=${bitmap != null} source=$mediaInfoSource key=$diskCacheKey" }
+            }
+        } catch (e: Exception) {
+            logThumbnail { "embeddedArtwork fail key=$diskCacheKey err=${e.message}" }
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     // 优先使用系统缩略图服务，质量优于 FFmpeg 提取帧
@@ -127,12 +168,9 @@ class VideoThumbnailDecoder(
         }
         logThumbnail { "diskCache miss strategy=${strategy.logName} key=$key" }
 
-        val mediaInfoStart = System.currentTimeMillis()
-        mediaInfoSemaphore.withPermit {
-            getThumbnailFromMediaInfo()
-        }?.scaleToFit()?.let { rawBitmap ->
-            logThumbnail { "mediaInfo ok ${System.currentTimeMillis() - mediaInfoStart}ms strategy=${strategy.logName} key=$key" }
-            val bitmap = writeToDiskCache(rawBitmap)
+        tryLoadEmbeddedArtwork()?.scaleToFit()?.let { artworkBitmap ->
+            logThumbnail { "embeddedArtwork ok strategy=${strategy.logName} key=$key" }
+            val bitmap = writeToDiskCache(artworkBitmap)
             return DecodeResult(
                 image = bitmap.toDrawable(options.context.resources).asImage(),
                 isSampled = true,
@@ -140,8 +178,20 @@ class VideoThumbnailDecoder(
         }
 
         tryLoadSystemThumbnail()?.let { systemBitmap ->
-            logThumbnail { "systemThumbnail fallback strategy=${strategy.logName} key=$key" }
+            logThumbnail { "systemThumbnail ok strategy=${strategy.logName} key=$key" }
             val bitmap = writeToDiskCache(systemBitmap)
+            return DecodeResult(
+                image = bitmap.toDrawable(options.context.resources).asImage(),
+                isSampled = true,
+            )
+        }
+
+        val mediaInfoStart = System.currentTimeMillis()
+        mediaInfoSemaphore.withPermit {
+            getThumbnailFromMediaInfo()
+        }?.scaleToFit()?.let { rawBitmap ->
+            logThumbnail { "mediaInfo ok ${System.currentTimeMillis() - mediaInfoStart}ms strategy=${strategy.logName} key=$key" }
+            val bitmap = writeToDiskCache(rawBitmap)
             return DecodeResult(
                 image = bitmap.toDrawable(options.context.resources).asImage(),
                 isSampled = true,
