@@ -1,8 +1,10 @@
-- 修复部分 MPEG-TS 视频因 PAT 声明的 PMT PID 与实际不一致导致无法播放、缩略图未正确生成的问题
+- 修复 SMB 服务器路径与子目录同名前缀时找不到目录的问题
+- 加快 SMB、FTP 和 WebDAV 远程目录浏览，并减少重复进入目录时的等待
 
 <details>
 <summary>English Version</summary>
 
-- Fix some MPEG-TS videos failing to play when the PMT PID declared in PAT differs from the actual PMT PID, and improve cases where thumbnails are not generated correctly
+- Fix SMB folders not being found when the server path and a child folder share the same prefix
+- Speed up SMB, FTP, and WebDAV remote folder browsing, and reduce waiting when reopening folders
 
 </details>
