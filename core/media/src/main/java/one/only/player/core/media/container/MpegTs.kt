@@ -1,4 +1,4 @@
-package one.only.player.core.common.media
+package one.only.player.core.media.container
 
 import android.content.ContentResolver
 import android.content.Context
@@ -16,6 +16,19 @@ data class MpegTsPacketPatch(
     val packetStart: Long,
     val packetBytes: ByteArray,
 )
+
+fun Uri.isMpegTsStream(context: Context): Boolean = runCatching {
+    when (scheme) {
+        ContentResolver.SCHEME_CONTENT -> context.contentResolver.openInputStream(this)?.use(::hasMpegTsPacketSync) == true
+        ContentResolver.SCHEME_FILE -> path?.let { File(it).isMpegTsStream() } == true
+        else -> false
+    }
+}.getOrDefault(false)
+
+fun File.isMpegTsStream(): Boolean = runCatching {
+    val file = takeIf(File::isFile) ?: return@runCatching false
+    file.inputStream().use(::hasMpegTsPacketSync)
+}.getOrDefault(false)
 
 fun hasMpegTsPacketSync(inputStream: InputStream): Boolean {
     val header = ByteArray(TS_PACKET_SIZE * TS_PACKET_CHECK_COUNT)

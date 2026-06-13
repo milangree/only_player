@@ -32,10 +32,10 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okio.FileSystem
 import one.only.player.core.common.Logger
-import one.only.player.core.common.media.MpegTsProgramMapPidFix
-import one.only.player.core.common.media.detectMpegTsProgramMapPidFix
-import one.only.player.core.common.media.patchMpegTsProgramMapPid
-import one.only.player.core.common.media.toMpegTsPidHex
+import one.only.player.core.media.container.MpegTsProgramMapPidFix
+import one.only.player.core.media.container.detectMpegTsProgramMapPidFix
+import one.only.player.core.media.container.patchMpegTsProgramMapPid
+import one.only.player.core.media.container.toMpegTsPidHex
 
 private const val MPEG_TS_PACKET_SIZE_BYTES = 188
 

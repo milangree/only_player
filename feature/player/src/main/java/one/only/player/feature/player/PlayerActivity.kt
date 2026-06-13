@@ -69,12 +69,12 @@ import one.only.player.core.common.extensions.applyPrivacyProtection
 import one.only.player.core.common.extensions.canonicalPathOrSelf
 import one.only.player.core.common.extensions.getFilenameFromUri
 import one.only.player.core.common.extensions.getMediaContentUri
-import one.only.player.core.common.extensions.isMpegTsStream
 import one.only.player.core.common.extensions.isSubtitleExtension
 import one.only.player.core.common.extensions.resolvePrivacyPreviewScrim
 import one.only.player.core.common.extensions.scanFileForContentUri
 import one.only.player.core.common.extensions.toPrivateLogSummary
 import one.only.player.core.common.storagePermission
+import one.only.player.core.media.container.isMpegTsStream
 import one.only.player.core.media.sync.MediaSynchronizer
 import one.only.player.core.model.ScreenOrientation
 import one.only.player.core.model.ThemeConfig
