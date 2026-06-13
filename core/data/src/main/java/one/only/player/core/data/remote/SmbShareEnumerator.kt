@@ -9,6 +9,7 @@ import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
+import com.hierynomus.smbj.share.NamedPipe
 import com.hierynomus.smbj.share.PipeShare
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -33,32 +34,37 @@ object SmbShareEnumerator {
         config: SmbConfig,
     ): List<ShareInfo> {
         val client = SMBClient(config)
-        val connection = client.connect(host, port)
-        val session = connection.authenticate(auth)
-        val pipeShare = session.connectShare("IPC$") as PipeShare
-
-        val pipe = pipeShare.open(
-            "srvsvc",
-            SMB2ImpersonationLevel.Impersonation,
-            EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE),
-            EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
-            SMB2ShareAccess.ALL,
-            SMB2CreateDisposition.FILE_OPEN,
-            EnumSet.noneOf(SMB2CreateOptions::class.java),
-        )
+        var connection: com.hierynomus.smbj.connection.Connection? = null
+        var session: com.hierynomus.smbj.session.Session? = null
+        var pipeShare: PipeShare? = null
+        var pipe: NamedPipe? = null
 
         try {
-            val bindAck = pipe.transact(buildBindPdu())
+            connection = client.connect(host, port)
+            session = connection.authenticate(auth)
+            pipeShare = session.connectShare("IPC$") as PipeShare
+            pipe = pipeShare.open(
+                "srvsvc",
+                SMB2ImpersonationLevel.Impersonation,
+                EnumSet.of(AccessMask.GENERIC_READ, AccessMask.GENERIC_WRITE),
+                EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                EnumSet.noneOf(SMB2CreateOptions::class.java),
+            )
+
+            val activePipe = pipe ?: error("SMB share enumeration pipe is not open")
+            val bindAck = activePipe.transact(buildBindPdu())
             verifyBindAck(bindAck)
 
-            val response = pipe.transact(buildNetShareEnumRequest(host))
+            val response = activePipe.transact(buildNetShareEnumRequest(host))
             return parseNetShareEnumResponse(response)
         } finally {
-            pipe.close()
-            pipeShare.close()
-            session.close()
-            connection.close()
-            client.close()
+            runCatching { pipe?.close() }
+            runCatching { pipeShare?.close() }
+            runCatching { session?.close() }
+            runCatching { connection?.close() }
+            runCatching { client.close() }
         }
     }
 

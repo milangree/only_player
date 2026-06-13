@@ -12,7 +12,6 @@ import com.hierynomus.msfscc.FileAttributes
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.SMBClient
-import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.share.DiskShare
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -27,10 +26,7 @@ import okhttp3.Request
 import one.only.player.core.common.Logger
 import one.only.player.core.data.remote.FtpClient
 import one.only.player.core.data.remote.SmbClient
-import one.only.player.core.data.remote.SmbClient.Companion.extractRelativePath
-import one.only.player.core.data.remote.SmbClient.Companion.extractShareName
 import one.only.player.core.data.remote.SmbClient.Companion.toSmbAuthContext
-import one.only.player.core.data.remote.SmbShareEnumerator
 import one.only.player.core.data.remote.WebDavClient
 import one.only.player.core.data.repository.RemoteServerRepository
 import one.only.player.core.model.RemoteFile
@@ -47,6 +43,9 @@ class CloudDocumentsProvider : DocumentsProvider() {
     }
     private val ftpClient: FtpClient by lazy {
         entryPoint.ftpClient()
+    }
+    private val smbClient: SmbClient by lazy {
+        entryPoint.smbClient()
     }
 
     private val entryPoint: CloudDocumentsProviderEntryPoint by lazy {
@@ -103,7 +102,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
         val parsed = parseDocumentId(parentDocumentId)
         val server = getServer(parsed.serverId) ?: return result
 
-        listFiles(server, parsed.path).forEach { file ->
+        listFiles(server, resolveListPath(server, parsed.path)).forEach { file ->
             appendFileRow(
                 result = result,
                 server = server,
@@ -127,7 +126,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
 
         val parsed = parseDocumentId(documentId)
         val server = getServer(parsed.serverId) ?: throw FileNotFoundException("Server not found")
-        if (parsed.path.isBlank() || parsed.path == "/") {
+        if (parsed.path.isBlank() || isServerRootDocument(server, parsed.path)) {
             throw FileNotFoundException("Document path is empty")
         }
 
@@ -149,17 +148,21 @@ class CloudDocumentsProvider : DocumentsProvider() {
         val parent = parseDocumentId(parentDocumentId)
         val child = parseDocumentId(documentId)
         if (parent.serverId != child.serverId) return false
-        if (parent.path == "/") return child.path != "/"
-        return child.path.startsWith(parent.path)
+        val server = getServer(parent.serverId) ?: return false
+        return isChildPath(
+            server = server,
+            parentPath = parent.path,
+            childPath = child.path,
+        )
     }
 
     override fun getDocumentType(documentId: String): String {
         if (documentId == ROOT_DOCUMENT_ID) return DocumentsContract.Document.MIME_TYPE_DIR
 
         val parsed = parseDocumentId(documentId)
-        if (parsed.path == "/") return DocumentsContract.Document.MIME_TYPE_DIR
-
         val server = getServer(parsed.serverId) ?: return FALLBACK_VIDEO_MIME
+        if (isServerRootDocument(server, parsed.path)) return DocumentsContract.Document.MIME_TYPE_DIR
+
         val fileName = parsed.path.substringAfterLast('/')
         val files = listFiles(server, parentPathOf(parsed.path))
         val file = files.firstOrNull { it.path.removeSuffix("/") == parsed.path.removeSuffix("/") }
@@ -179,7 +182,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
         val server = getServer(parsed.serverId) ?: return null
         val path = mutableListOf(ROOT_DOCUMENT_ID, buildServerDocumentId(server.id))
 
-        if (parsed.path != "/") {
+        if (!isServerRootDocument(server, parsed.path)) {
             path += buildDocumentPathSegments(server, parsed.path)
         }
 
@@ -200,7 +203,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
         if (rootId != ROOT_ID) return result
 
         getServers().forEach { server ->
-            listFiles(server, server.path.ensureDirectoryPath())
+            listFiles(server, normalizeDirectoryPath(server, server.path))
                 .filter { !it.isDirectory }
                 .filter { it.name.contains(query, ignoreCase = true) }
                 .forEach { file ->
@@ -231,7 +234,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
         val parsed = parseDocumentId(documentId)
         val server = getServer(parsed.serverId) ?: return
 
-        if (parsed.path == "/") {
+        if (isServerRootDocument(server, parsed.path)) {
             appendServerRow(result, server)
             return
         }
@@ -304,77 +307,10 @@ class CloudDocumentsProvider : DocumentsProvider() {
     }
 
     private fun listSmbDirectory(server: RemoteServer, path: String): List<RemoteFile> = runCatching {
-        val config = SmbConfig.builder()
-            .withTimeout(SmbClient.TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .withSoTimeout(SmbClient.TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .build()
-
-        val isServerPathRoot = server.path.removePrefix("/").removeSuffix("/").isBlank()
-        val isCurrentPathRoot = path.removePrefix("/").removeSuffix("/").isBlank()
-
-        if (isServerPathRoot && isCurrentPathRoot) {
-            val shares = SmbShareEnumerator.listShares(
-                host = server.host,
-                port = server.port ?: SmbClient.DEFAULT_PORT,
-                auth = server.toSmbAuthContext(),
-                config = config,
-            )
-            return@runCatching shares
-                .filter { it.isDisk && !it.isHidden }
-                .map { share ->
-                    RemoteFile(
-                        name = share.name,
-                        path = "/${share.name}/",
-                        isDirectory = true,
-                        size = 0,
-                    )
-                }
-                .sortedBy { it.name }
-        }
-
-        val shareName: String
-        val relativePath: String
-
-        if (isServerPathRoot) {
-            val trimmed = path.removePrefix("/").removeSuffix("/")
-            shareName = trimmed.substringBefore("/")
-            relativePath = trimmed.substringAfter("/", missingDelimiterValue = "")
-                .replace("/", "\\")
-        } else {
-            shareName = extractShareName(server.path)
-            relativePath = extractRelativePath(server.path, path)
-        }
-
-        val client = SMBClient(config)
-        var connection: com.hierynomus.smbj.connection.Connection? = null
-        var session: com.hierynomus.smbj.session.Session? = null
-        var share: DiskShare? = null
-        try {
-            connection = client.connect(server.host, server.port ?: SmbClient.DEFAULT_PORT)
-            session = connection.authenticate(server.toSmbAuthContext())
-            share = session.connectShare(shareName) as DiskShare
-            val files = mutableListOf<RemoteFile>()
-            share.list(relativePath).forEach { info ->
-                val name = info.fileName
-                if (name == "." || name == "..") return@forEach
-
-                val isDirectory = info.fileAttributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value != 0L
-                val fullPath = if (path.endsWith('/')) "$path$name" else "$path/$name"
-                files.add(
-                    RemoteFile(
-                        name = name,
-                        path = if (isDirectory) "$fullPath/" else fullPath,
-                        isDirectory = isDirectory,
-                        size = info.endOfFile,
-                    ),
-                )
+        kotlinx.coroutines.runBlocking {
+            smbClient.listDirectory(server, path).getOrElse { exception ->
+                throw exception
             }
-            files.sortedWith(compareByDescending<RemoteFile> { it.isDirectory }.thenBy { it.name })
-        } finally {
-            runCatching { share?.close() }
-            runCatching { session?.close() }
-            runCatching { connection?.close() }
-            runCatching { client.close() }
         }
     }.getOrElse { exception ->
         Logger.error(TAG, "Failed to list SMB directory", exception)
@@ -498,69 +434,90 @@ class CloudDocumentsProvider : DocumentsProvider() {
         path: String,
         signal: CancellationSignal?,
     ): ParcelFileDescriptor {
-        val isServerPathRoot = server.path.removePrefix("/").removeSuffix("/").isBlank()
-
-        val shareName: String
-        val relativePath: String
-
-        if (isServerPathRoot) {
-            val trimmed = path.removePrefix("/").removeSuffix("/")
-            shareName = trimmed.substringBefore("/")
-            relativePath = trimmed.substringAfter("/", missingDelimiterValue = "")
-                .replace("/", "\\")
-        } else {
-            shareName = extractShareName(server.path)
-            relativePath = extractRelativePath(server.path, path)
-        }
-
-        val config = SmbConfig.builder()
-            .withTimeout(SmbClient.TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .withSoTimeout(SmbClient.TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .build()
-        val client = SMBClient(config)
-        val connection = client.connect(server.host, server.port ?: SmbClient.DEFAULT_PORT)
-        val session = connection.authenticate(server.toSmbAuthContext())
-        val share = session.connectShare(shareName) as DiskShare
-        val file = share.openFile(
-            relativePath,
-            EnumSet.of(AccessMask.GENERIC_READ),
-            EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
-            SMB2ShareAccess.ALL,
-            SMB2CreateDisposition.FILE_OPEN,
-            EnumSet.noneOf(com.hierynomus.mssmb2.SMB2CreateOptions::class.java),
+        val sharePath = SmbClient.resolveSharePath(
+            serverPath = server.path,
+            path = path,
         )
-        val input = file.inputStream
-        val pipe = ParcelFileDescriptor.createReliablePipe()
 
-        signal?.setOnCancelListener {
-            runCatching { pipe[0].close() }
-            runCatching { pipe[1].close() }
-            runCatching { input.close() }
-            runCatching { file.close() }
-            runCatching { share.close() }
-            runCatching { session.close() }
-            runCatching { connection.close() }
-            runCatching { client.close() }
-        }
+        val config = SmbClient.buildFileConfig()
+        val client = SMBClient(config)
+        var connection: com.hierynomus.smbj.connection.Connection? = null
+        var session: com.hierynomus.smbj.session.Session? = null
+        var share: DiskShare? = null
+        var file: com.hierynomus.smbj.share.File? = null
 
-        Thread {
-            try {
-                ParcelFileDescriptor.AutoCloseOutputStream(pipe[1]).use { output ->
-                    input.use { source ->
-                        source.copyTo(output)
-                    }
-                }
-            } catch (exception: Exception) {
-                Logger.error(TAG, "Failed to stream SMB document", exception)
-            } finally {
-                runCatching { file.close() }
-                runCatching { share.close() }
-                runCatching { session.close() }
-                runCatching { connection.close() }
-                runCatching { client.close() }
+        try {
+            connection = client.connect(server.host, server.port ?: SmbClient.DEFAULT_PORT)
+            session = connection.authenticate(server.toSmbAuthContext())
+            share = session.connectShare(sharePath.shareName) as DiskShare
+            file = share.openFile(
+                sharePath.relativePath,
+                EnumSet.of(AccessMask.GENERIC_READ),
+                EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                EnumSet.noneOf(com.hierynomus.mssmb2.SMB2CreateOptions::class.java),
+            )
+            val input = file.inputStream
+            val pipe = ParcelFileDescriptor.createReliablePipe()
+
+            signal?.setOnCancelListener {
+                runCatching { pipe[0].close() }
+                runCatching { pipe[1].close() }
+                runCatching { input.close() }
+                closeSmbDocumentResources(
+                    client = client,
+                    connection = connection,
+                    session = session,
+                    share = share,
+                    file = file,
+                )
             }
-        }.start()
-        return pipe[0]
+
+            Thread {
+                try {
+                    ParcelFileDescriptor.AutoCloseOutputStream(pipe[1]).use { output ->
+                        input.use { source ->
+                            source.copyTo(output)
+                        }
+                    }
+                } catch (exception: Exception) {
+                    Logger.error(TAG, "Failed to stream SMB document", exception)
+                } finally {
+                    closeSmbDocumentResources(
+                        client = client,
+                        connection = connection,
+                        session = session,
+                        share = share,
+                        file = file,
+                    )
+                }
+            }.start()
+            return pipe[0]
+        } catch (exception: Exception) {
+            closeSmbDocumentResources(
+                client = client,
+                connection = connection,
+                session = session,
+                share = share,
+                file = file,
+            )
+            throw exception
+        }
+    }
+
+    private fun closeSmbDocumentResources(
+        client: SMBClient,
+        connection: com.hierynomus.smbj.connection.Connection?,
+        session: com.hierynomus.smbj.session.Session?,
+        share: DiskShare?,
+        file: com.hierynomus.smbj.share.File?,
+    ) {
+        runCatching { file?.close() }
+        runCatching { share?.close() }
+        runCatching { session?.close() }
+        runCatching { connection?.close() }
+        runCatching { client.close() }
     }
 
     private fun getServers(): List<RemoteServer> = runCatching {
@@ -614,14 +571,17 @@ class CloudDocumentsProvider : DocumentsProvider() {
         server: RemoteServer,
         path: String,
     ): List<String> {
-        val normalized = path.removePrefix("/").removeSuffix("/")
+        if (isServerRootDocument(server, path)) return emptyList()
+
+        val normalizedPath = normalizeDirectoryPath(server, path)
+        val normalized = normalizedPath.removePrefix("/").removeSuffix("/")
         if (normalized.isBlank()) return emptyList()
 
         val segments = normalized.split('/').filter { it.isNotBlank() }
         val documentIds = mutableListOf<String>()
         var currentPath = "/"
 
-        if (server.protocol == ServerProtocol.SMB && server.path.removePrefix("/").removeSuffix("/").isBlank()) {
+        if (server.protocol == ServerProtocol.SMB && SmbClient.isRootPath(server.path)) {
             for (segment in segments) {
                 currentPath = if (currentPath == "/") "/$segment/" else "$currentPath$segment/"
                 documentIds += buildDocumentId(server.id, currentPath)
@@ -629,7 +589,7 @@ class CloudDocumentsProvider : DocumentsProvider() {
             return documentIds
         }
 
-        val serverBasePath = server.path.ensureDirectoryPath()
+        val serverBasePath = normalizeDirectoryPath(server, server.path)
         val serverBaseSegments = serverBasePath.removePrefix("/").removeSuffix("/")
             .split('/')
             .filter { it.isNotBlank() }
@@ -643,6 +603,43 @@ class CloudDocumentsProvider : DocumentsProvider() {
         }
 
         return documentIds
+    }
+
+    private fun resolveListPath(server: RemoteServer, path: String): String {
+        if (isServerRootDocument(server, path)) {
+            return normalizeDirectoryPath(server, server.path)
+        }
+        return normalizeDirectoryPath(server, path)
+    }
+
+    private fun isServerRootDocument(server: RemoteServer, path: String): Boolean {
+        val normalizedPath = normalizeDirectoryPath(server, path)
+        if (normalizedPath == "/") return true
+
+        val serverRoot = normalizeDirectoryPath(server, server.path)
+        return when (server.protocol) {
+            ServerProtocol.SMB -> normalizedPath.equals(serverRoot, ignoreCase = true)
+            ServerProtocol.WEBDAV,
+            ServerProtocol.FTP,
+            -> normalizedPath == serverRoot
+        }
+    }
+
+    private fun isChildPath(
+        server: RemoteServer,
+        parentPath: String,
+        childPath: String,
+    ): Boolean {
+        val parent = normalizeDirectoryPath(server, parentPath).removeSuffix("/")
+        val child = normalizeDirectoryPath(server, childPath).removeSuffix("/")
+        if (parent.isBlank()) return child.isNotBlank()
+        if (server.protocol == ServerProtocol.SMB) {
+            if (child.equals(parent, ignoreCase = true)) return false
+            return child.startsWith("$parent/", ignoreCase = true)
+        }
+
+        if (child == parent) return false
+        return child.startsWith("$parent/")
     }
 
     private fun resolveMimeType(
@@ -663,7 +660,16 @@ class CloudDocumentsProvider : DocumentsProvider() {
             }
     }
 
+    private fun normalizeDirectoryPath(server: RemoteServer, path: String): String = when (server.protocol) {
+        ServerProtocol.SMB -> SmbClient.normalizeRemotePath(path, isDirectory = true)
+        ServerProtocol.WEBDAV,
+        ServerProtocol.FTP,
+        -> path.ensureLeadingSlash().ensureDirectoryPath()
+    }
+
     private fun String.ensureDirectoryPath(): String = if (endsWith('/')) this else "$this/"
+
+    private fun String.ensureLeadingSlash(): String = if (startsWith('/')) this else "/$this"
 
     private data class ParsedDocumentId(
         val serverId: Long,
@@ -744,4 +750,5 @@ interface CloudDocumentsProviderEntryPoint {
     fun remoteServerRepository(): RemoteServerRepository
     fun webDavClient(): WebDavClient
     fun ftpClient(): FtpClient
+    fun smbClient(): SmbClient
 }

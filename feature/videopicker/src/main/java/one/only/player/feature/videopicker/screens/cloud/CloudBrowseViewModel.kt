@@ -81,12 +81,14 @@ class CloudBrowseViewModel @Inject constructor(
                 _uiState.update { it.copy(isError = true, errorMessage = "Server not found") }
                 return@launch
             }
-            val startPath = initialPath.takeIf { it != "/" || server.path == "/" } ?: server.path
+            val serverRootPath = normalizeDirectoryPath(server, server.path)
+            val initialDirectoryPath = normalizeDirectoryPath(server, initialPath)
+            val startPath = initialDirectoryPath.takeIf { it != "/" || serverRootPath == "/" } ?: serverRootPath
             _uiState.update {
                 it.copy(
                     server = server,
                     currentPath = startPath,
-                    isAtRoot = isAtServerRoot(startPath, server.path),
+                    isAtRoot = isAtServerRoot(startPath, server),
                 )
             }
             loadCurrentDirectory()
@@ -111,15 +113,19 @@ class CloudBrowseViewModel @Inject constructor(
 
         viewModelScope.launch(ioDispatcher) {
             when (server.protocol) {
-                ServerProtocol.WEBDAV -> loadWebDavDirectory(server, path)
-                ServerProtocol.SMB -> loadSmbDirectory(server, path)
-                ServerProtocol.FTP -> loadFtpDirectory(server, path)
+                ServerProtocol.WEBDAV -> loadWebDavDirectory(server, path, forceRefresh)
+                ServerProtocol.SMB -> loadSmbDirectory(server, path, forceRefresh)
+                ServerProtocol.FTP -> loadFtpDirectory(server, path, forceRefresh)
             }
         }
     }
 
-    private suspend fun loadWebDavDirectory(server: RemoteServer, path: String) {
-        webDavClient.listDirectory(server, path)
+    private suspend fun loadWebDavDirectory(
+        server: RemoteServer,
+        path: String,
+        forceRefresh: Boolean,
+    ) {
+        webDavClient.listDirectory(server, path, forceRefresh = forceRefresh)
             .onSuccess { files ->
                 val browsableFiles = files.filterBrowsableFiles()
                 _uiState.update {
@@ -152,8 +158,12 @@ class CloudBrowseViewModel @Inject constructor(
             }
     }
 
-    private suspend fun loadSmbDirectory(server: RemoteServer, path: String) {
-        smbClient.listDirectory(server, path)
+    private suspend fun loadSmbDirectory(
+        server: RemoteServer,
+        path: String,
+        forceRefresh: Boolean,
+    ) {
+        smbClient.listDirectory(server, path, forceRefresh = forceRefresh)
             .onSuccess { files ->
                 _uiState.update {
                     it.copy(
@@ -180,8 +190,12 @@ class CloudBrowseViewModel @Inject constructor(
             }
     }
 
-    private suspend fun loadFtpDirectory(server: RemoteServer, path: String) {
-        ftpClient.listDirectory(server, path)
+    private suspend fun loadFtpDirectory(
+        server: RemoteServer,
+        path: String,
+        forceRefresh: Boolean,
+    ) {
+        ftpClient.listDirectory(server, path, forceRefresh = forceRefresh)
             .onSuccess { files ->
                 val browsableFiles = files.filterBrowsableFiles()
                 _uiState.update {
@@ -303,7 +317,12 @@ class CloudBrowseViewModel @Inject constructor(
 
     fun buildCurrentDirectoryDocumentId(): String? {
         val server = _uiState.value.server ?: return null
-        return "${server.id}|${Uri.encode(_uiState.value.currentPath)}"
+        val documentPath = if (isAtServerRoot(_uiState.value.currentPath, server)) {
+            "/"
+        } else {
+            _uiState.value.currentPath
+        }
+        return "${server.id}|${Uri.encode(documentPath)}"
     }
 
     fun buildFileDocumentId(file: RemoteFile): String? {
@@ -457,12 +476,31 @@ class CloudBrowseViewModel @Inject constructor(
         return parentPath.ifBlank { "/" }
     }
 
-    // PROPFIND href 可能是 URL 编码的，server.path 是用户输入的原始文本
-    private fun isAtServerRoot(currentPath: String, serverPath: String): Boolean {
+    private fun normalizeDirectoryPath(
+        server: RemoteServer,
+        path: String,
+    ): String = when (server.protocol) {
+        ServerProtocol.SMB -> SmbClient.normalizeRemotePath(path, isDirectory = true)
+        ServerProtocol.WEBDAV,
+        ServerProtocol.FTP,
+        -> path.ensureLeadingSlash().ensureTrailingSlash()
+    }
+
+    private fun isAtServerRoot(currentPath: String, server: RemoteServer): Boolean {
+        if (server.protocol == ServerProtocol.SMB) {
+            val current = SmbClient.normalizeRemotePath(currentPath, isDirectory = true).removeSuffix("/")
+            val root = SmbClient.normalizeRemotePath(server.path, isDirectory = true).removeSuffix("/")
+            return current.equals(root, ignoreCase = true)
+        }
+
         val decodedCurrent = URLDecoder.decode(currentPath.removeSuffix("/"), "UTF-8")
-        val decodedRoot = URLDecoder.decode(serverPath.removeSuffix("/"), "UTF-8")
+        val decodedRoot = URLDecoder.decode(normalizeDirectoryPath(server, server.path).removeSuffix("/"), "UTF-8")
         return decodedCurrent == decodedRoot
     }
+
+    private fun String.ensureLeadingSlash(): String = if (startsWith('/')) this else "/$this"
+
+    private fun String.ensureTrailingSlash(): String = if (endsWith('/')) this else "$this/"
 
     companion object {
         private val BROWSABLE_VIDEO_EXTENSIONS = setOf(
