@@ -19,7 +19,7 @@ interface FavoriteItemDao {
 
     @Query(
         """
-        SELECT * FROM favorite_item 
+        SELECT * FROM favorite_item
         WHERE (:parentId IS NULL AND parent_id IS NULL) OR parent_id = :parentId
         ORDER BY sort_order ASC, title COLLATE NOCASE ASC
         """,
