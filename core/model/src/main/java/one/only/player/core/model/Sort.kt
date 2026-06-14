@@ -117,6 +117,36 @@ data class Sort(
         }
     }
 
+    fun remoteFileComparator(): Comparator<RemoteFile> {
+        val fileNameComparator: Comparator<RemoteFile> = Comparator { file1, file2 ->
+            return@Comparator stringComparator.compare(
+                file1.name.lowercase(),
+                file2.name.lowercase(),
+            )
+        }
+
+        val filePathComparator: Comparator<RemoteFile> = Comparator { file1, file2 ->
+            return@Comparator stringComparator.compare(
+                file1.path.lowercase(),
+                file2.path.lowercase(),
+            )
+        }
+
+        val comparator = when (by) {
+            By.TITLE -> fileNameComparator
+            By.PATH -> filePathComparator
+            By.SIZE -> compareBy<RemoteFile> { it.size }.then(fileNameComparator)
+            By.LENGTH,
+            By.DATE,
+            -> fileNameComparator
+        }
+
+        return when (order) {
+            Order.ASCENDING -> comparator
+            Order.DESCENDING -> comparator.reversedCompat()
+        }
+    }
+
     private fun getChunk(string: String, length: Int, marker: Int): String {
         var current = marker
         val chunk = StringBuilder()

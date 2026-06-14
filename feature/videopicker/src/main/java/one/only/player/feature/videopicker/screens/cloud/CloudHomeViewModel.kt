@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import one.only.player.core.data.repository.FavoriteRepository
+import one.only.player.core.data.repository.PreferencesRepository
 import one.only.player.core.data.repository.RemoteServerRepository
 import one.only.player.core.data.repository.toFavoriteRootItem
 import one.only.player.core.model.RemoteServer
@@ -20,6 +21,7 @@ import one.only.player.core.model.ServerProtocol
 class CloudHomeViewModel @Inject constructor(
     private val repository: RemoteServerRepository,
     private val favoriteRepository: FavoriteRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<CloudHomeUiState> = repository.getAll()
@@ -51,6 +53,7 @@ class CloudHomeViewModel @Inject constructor(
     private fun deleteServer(id: Long) {
         viewModelScope.launch {
             repository.deleteById(id)
+            preferencesRepository.updateApplicationPreferences { it.withoutCloudQuickSettings(id) }
         }
     }
 

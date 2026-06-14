@@ -34,6 +34,7 @@ import one.only.player.core.model.ApplicationPreferences
 import one.only.player.core.model.RemoteFile
 import one.only.player.core.model.RemoteServer
 import one.only.player.core.model.ServerProtocol
+import one.only.player.core.model.Sort
 import one.only.player.core.model.Video
 
 @HiltViewModel
@@ -59,7 +60,15 @@ class CloudBrowseViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { preferences ->
-                _uiState.update { it.copy(preferences = preferences) }
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        preferences = preferences,
+                        files = currentState.files.sortedForCloud(
+                            preferences = preferences,
+                            serverId = currentState.server?.id,
+                        ),
+                    )
+                }
             }
         }
         loadServer()
@@ -73,6 +82,7 @@ class CloudBrowseViewModel @Inject constructor(
             CloudBrowseEvent.RefreshPlaybackStates -> loadPlaybackStates()
             CloudBrowseEvent.AddCurrentDirectoryFavorite -> addCurrentDirectoryFavorite()
             is CloudBrowseEvent.AddFavorite -> addFavorite(event.file)
+            is CloudBrowseEvent.UpdateQuickSettings -> updateQuickSettings(event.preferences)
         }
     }
 
@@ -120,7 +130,10 @@ class CloudBrowseViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            files = files,
+                            files = files.sortedForCloud(
+                                preferences = it.preferences,
+                                serverId = server.id,
+                            ),
                             isError = false,
                             errorMessage = "",
                             playbackStates = emptyMap(),
@@ -304,6 +317,19 @@ class CloudBrowseViewModel @Inject constructor(
         }
     }
 
+    private fun updateQuickSettings(preferences: ApplicationPreferences) {
+        val currentServerId = _uiState.value.server?.id ?: return
+        val settings = preferences.cloudQuickSettings(currentServerId)
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { currentPreferences ->
+                currentPreferences.withCloudQuickSettings(
+                    serverId = currentServerId,
+                    settings = settings,
+                )
+            }
+        }
+    }
+
     private fun buildProbeUrl(
         server: RemoteServer,
         file: RemoteFile,
@@ -355,6 +381,19 @@ class CloudBrowseViewModel @Inject constructor(
         val parentPath = path.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
         return parentPath.ifBlank { "/" }
     }
+
+    private fun List<RemoteFile>.sortedForCloud(
+        preferences: ApplicationPreferences,
+        serverId: Long?,
+    ): List<RemoteFile> {
+        val settings = preferences.cloudQuickSettings(serverId)
+        val comparator = Sort(
+            by = settings.sortBy,
+            order = settings.sortOrder,
+        ).remoteFileComparator()
+        val (folders, videos) = partition(RemoteFile::isDirectory)
+        return folders.sortedWith(comparator) + videos.sortedWith(comparator)
+    }
 }
 
 @Stable
@@ -386,4 +425,5 @@ sealed interface CloudBrowseEvent {
     data object RefreshPlaybackStates : CloudBrowseEvent
     data object AddCurrentDirectoryFavorite : CloudBrowseEvent
     data class AddFavorite(val file: RemoteFile) : CloudBrowseEvent
+    data class UpdateQuickSettings(val preferences: ApplicationPreferences) : CloudBrowseEvent
 }

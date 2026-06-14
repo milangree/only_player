@@ -158,6 +158,7 @@
     <string name="player_description">播放器外觀、播放控制元件</string>
     <string name="seek_gesture_description">橫向滑動以向前或向後跳轉</string>
     <string name="quick_settings">快速設定</string>
+    <string name="cloud_quick_settings">雲端快速設定</string>
     <string name="select_subtitle_track">選擇字幕軌</string>
     <string name="play_pause_ff_rewind">播放/暫停與快進/快退</string>
     <string name="enter_a_network_url">輸入一個網路 URL：</string>

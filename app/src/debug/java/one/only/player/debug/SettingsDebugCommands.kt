@@ -13,11 +13,14 @@ import one.only.player.core.model.ControllerAutoHidePreset
 import one.only.player.core.model.DecoderPriority
 import one.only.player.core.model.DoubleTapGesture
 import one.only.player.core.model.Font
+import one.only.player.core.model.MediaLayoutMode
+import one.only.player.core.model.MediaViewMode
 import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.Resume
 import one.only.player.core.model.ScreenOrientation
+import one.only.player.core.model.Sort
 import one.only.player.core.model.SubtitleColor
 import one.only.player.core.model.SubtitleEdgeStyle
 import one.only.player.core.model.ThemeConfig
@@ -95,8 +98,45 @@ internal suspend fun DebugCommandEntryPoint.setSetting(
         "media.recycle_bin" -> updateApplicationBoolean(value) { preferences, isEnabled ->
             preferences.copy(isRecycleBinEnabled = isEnabled)
         }
+        "media.view_mode" -> {
+            val viewMode = enumValue<MediaViewMode>(value.requiredString(EXTRA_VALUE))
+            preferencesRepository().updateApplicationPreferences { it.copy(mediaViewMode = viewMode) }
+        }
+        "media.layout_mode" -> {
+            val layoutMode = enumValue<MediaLayoutMode>(value.requiredString(EXTRA_VALUE))
+            preferencesRepository().updateApplicationPreferences { it.copy(mediaLayoutMode = layoutMode) }
+        }
         "media.layout_scale" -> updateApplicationFloat(value) { preferences, floatValue ->
             preferences.withMediaLayoutScale(floatValue)
+        }
+        "media.sort_by" -> {
+            val sortBy = enumValue<Sort.By>(value.requiredString(EXTRA_VALUE))
+            preferencesRepository().updateApplicationPreferences { it.copy(sortBy = sortBy) }
+        }
+        "media.sort_order" -> {
+            val sortOrder = enumValue<Sort.Order>(value.requiredString(EXTRA_VALUE))
+            preferencesRepository().updateApplicationPreferences { it.copy(sortOrder = sortOrder) }
+        }
+        "media.field.duration" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowDurationField = isEnabled)
+        }
+        "media.field.extension" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowExtensionField = isEnabled)
+        }
+        "media.field.path" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowPathField = isEnabled)
+        }
+        "media.field.played_progress" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowPlayedProgress = isEnabled)
+        }
+        "media.field.resolution" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowResolutionField = isEnabled)
+        }
+        "media.field.size" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowSizeField = isEnabled)
+        }
+        "media.field.thumbnail" -> updateApplicationBoolean(value) { preferences, isEnabled ->
+            preferences.copy(shouldShowThumbnailField = isEnabled)
         }
         "media.exclude_folder" -> {
             val path = value.requiredString(EXTRA_VALUE)
@@ -306,6 +346,13 @@ internal suspend fun DebugCommandEntryPoint.toggleSetting(target: String?) {
         "media.restore_last_played_in_folders" -> toggleApplication { it.copy(shouldRestoreLastPlayedMediaInFolders = !it.shouldRestoreLastPlayedMediaInFolders) }
         "media.ignore_nomedia" -> toggleApplication { it.copy(shouldIgnoreNoMediaFiles = !it.shouldIgnoreNoMediaFiles) }
         "media.recycle_bin" -> toggleApplication { it.copy(isRecycleBinEnabled = !it.isRecycleBinEnabled) }
+        "media.field.duration" -> toggleApplication { it.copy(shouldShowDurationField = !it.shouldShowDurationField) }
+        "media.field.extension" -> toggleApplication { it.copy(shouldShowExtensionField = !it.shouldShowExtensionField) }
+        "media.field.path" -> toggleApplication { it.copy(shouldShowPathField = !it.shouldShowPathField) }
+        "media.field.played_progress" -> toggleApplication { it.copy(shouldShowPlayedProgress = !it.shouldShowPlayedProgress) }
+        "media.field.resolution" -> toggleApplication { it.copy(shouldShowResolutionField = !it.shouldShowResolutionField) }
+        "media.field.size" -> toggleApplication { it.copy(shouldShowSizeField = !it.shouldShowSizeField) }
+        "media.field.thumbnail" -> toggleApplication { it.copy(shouldShowThumbnailField = !it.shouldShowThumbnailField) }
         "player.remember_orientation" -> togglePlayer { it.copy(shouldRememberPlayerScreenOrientation = !it.shouldRememberPlayerScreenOrientation, lastPlayerScreenOrientation = null) }
         "player.resume" -> togglePlayer { it.copy(resume = if (it.resume == Resume.YES) Resume.NO else Resume.YES) }
         "player.autoplay" -> togglePlayer { it.copy(shouldAutoPlay = !it.shouldAutoPlay) }

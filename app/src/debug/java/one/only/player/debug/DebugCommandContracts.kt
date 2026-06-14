@@ -62,6 +62,11 @@ internal val CLOUD_MEDIA_METHODS = setOf(
     "cloud.media.open",
 )
 
+internal val CLOUD_QUICK_SETTINGS_METHODS = setOf(
+    "cloud.quick_settings.get",
+    "cloud.quick_settings.set",
+)
+
 internal val FAVORITE_METHODS = setOf(
     "favorite.add",
     "favorite.list",

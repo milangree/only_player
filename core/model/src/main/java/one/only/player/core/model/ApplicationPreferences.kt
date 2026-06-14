@@ -23,6 +23,7 @@ data class ApplicationPreferences(
     val mediaViewMode: MediaViewMode = MediaViewMode.FOLDERS,
     val mediaLayoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
     val mediaLayoutScale: Float = DEFAULT_MEDIA_LAYOUT_SCALE,
+    val cloudQuickSettingsByServerId: Map<String, CloudQuickSettings> = emptyMap(),
 
     // 字段显示
     val shouldShowDurationField: Boolean = true,
@@ -59,12 +60,62 @@ data class ApplicationPreferences(
             .roundToStep(MEDIA_LAYOUT_SCALE_STEP),
     )
 
+    fun cloudQuickSettings(serverId: Long?): CloudQuickSettings {
+        val key = serverId?.takeIf { it > 0L }?.toString() ?: return CloudQuickSettings()
+        return cloudQuickSettingsByServerId[key] ?: CloudQuickSettings()
+    }
+
+    fun withCloudQuickSettings(
+        serverId: Long?,
+        settings: CloudQuickSettings,
+    ): ApplicationPreferences {
+        val key = serverId?.takeIf { it > 0L }?.toString() ?: return this
+        return copy(
+            cloudQuickSettingsByServerId = cloudQuickSettingsByServerId + (key to settings.normalized()),
+        )
+    }
+
+    fun withoutCloudQuickSettings(serverId: Long): ApplicationPreferences = copy(
+        cloudQuickSettingsByServerId = cloudQuickSettingsByServerId - serverId.toString(),
+    )
+
     companion object {
         const val DEFAULT_THUMBNAIL_FRAME_POSITION = 0.5f
         const val DEFAULT_MEDIA_LAYOUT_SCALE = 1f
         const val MIN_MEDIA_LAYOUT_SCALE = 0.75f
         const val MAX_MEDIA_LAYOUT_SCALE = 1.5f
         const val MEDIA_LAYOUT_SCALE_STEP = 0.05f
+    }
+}
+
+@Serializable
+data class CloudQuickSettings(
+    val sortBy: Sort.By = Sort.By.TITLE,
+    val sortOrder: Sort.Order = Sort.Order.ASCENDING,
+    val mediaLayoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
+    val mediaLayoutScale: Float = ApplicationPreferences.DEFAULT_MEDIA_LAYOUT_SCALE,
+    val shouldShowExtensionField: Boolean = false,
+    val shouldShowPathField: Boolean = true,
+    val shouldShowSizeField: Boolean = true,
+    val shouldShowPlayedProgress: Boolean = true,
+) {
+    fun normalizedMediaLayoutScale(): Float = mediaLayoutScale
+        .coerceIn(ApplicationPreferences.MIN_MEDIA_LAYOUT_SCALE, ApplicationPreferences.MAX_MEDIA_LAYOUT_SCALE)
+        .roundToStep(ApplicationPreferences.MEDIA_LAYOUT_SCALE_STEP)
+
+    fun withMediaLayoutScale(scale: Float): CloudQuickSettings = copy(
+        mediaLayoutScale = scale
+            .coerceIn(ApplicationPreferences.MIN_MEDIA_LAYOUT_SCALE, ApplicationPreferences.MAX_MEDIA_LAYOUT_SCALE)
+            .roundToStep(ApplicationPreferences.MEDIA_LAYOUT_SCALE_STEP),
+    )
+
+    fun normalized(): CloudQuickSettings = copy(
+        sortBy = sortBy.takeIf { it in SUPPORTED_SORT_OPTIONS } ?: Sort.By.TITLE,
+        mediaLayoutScale = normalizedMediaLayoutScale(),
+    )
+
+    companion object {
+        val SUPPORTED_SORT_OPTIONS = listOf(Sort.By.TITLE, Sort.By.SIZE, Sort.By.PATH)
     }
 }
 

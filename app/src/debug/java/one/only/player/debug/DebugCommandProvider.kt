@@ -40,6 +40,7 @@ class DebugCommandProvider : ContentProvider() {
             METHOD_SETTINGS_ACTION -> context.runSettingsCommand(method, arg, extras) { runSettingAction(context, arg) }
             in CLOUD_SERVER_METHODS -> context.runCloudServerCommand(method.removePrefix("cloud.server."), arg, extras)
             in CLOUD_MEDIA_METHODS -> context.runCloudMediaCommand(method.removePrefix("cloud.media."), arg, extras)
+            in CLOUD_QUICK_SETTINGS_METHODS -> context.runCloudQuickSettingsCommand(method.removePrefix("cloud.quick_settings."), arg, extras)
             in FAVORITE_METHODS -> context.runFavoriteCommand(method.removePrefix("favorite."), arg, extras)
             in MEDIA_METHODS -> context.runMediaCommand(method.removePrefix("media."), arg, extras)
             in PLAYER_ACTION_METHODS -> context.runPlayerAction(method.removePrefix("player."), arg, extras.withTarget(arg))

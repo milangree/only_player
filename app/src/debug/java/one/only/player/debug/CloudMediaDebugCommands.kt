@@ -6,7 +6,11 @@ import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.runBlocking
+import one.only.player.core.model.ApplicationPreferences
+import one.only.player.core.model.CloudQuickSettings
+import one.only.player.core.model.MediaLayoutMode
 import one.only.player.core.model.RemoteFile
+import one.only.player.core.model.Sort
 
 internal fun Context.runCloudMediaCommand(
     action: String,
@@ -32,6 +36,29 @@ internal fun Context.runCloudMediaCommand(
     }
 }
 
+internal fun Context.runCloudQuickSettingsCommand(
+    action: String,
+    target: String?,
+    extras: Bundle?,
+): Bundle {
+    val command = "cloud.quick_settings.$action"
+    val entryPoint = EntryPointAccessors.fromApplication(
+        applicationContext,
+        DebugCommandEntryPoint::class.java,
+    )
+
+    return runCatching {
+        runBlocking { entryPoint.runCloudQuickSettingsAction(action, target, extras ?: Bundle.EMPTY) }
+    }.getOrElse {
+        debugResult(
+            isOk = false,
+            message = it.message ?: "Failed to handle cloud quick settings action: $action",
+            command = command,
+            target = target,
+        )
+    }
+}
+
 private suspend fun DebugCommandEntryPoint.runCloudMediaAction(
     context: Context,
     action: String,
@@ -44,7 +71,13 @@ private suspend fun DebugCommandEntryPoint.runCloudMediaAction(
         "open" -> extras.resolveOpenDirectoryPath(server.path)
         else -> server.path
     }
-    val files = remoteMediaResolver().listBrowsableFiles(server, directoryPath, forceRefresh = true).getOrThrow()
+    val files = remoteMediaResolver()
+        .listBrowsableFiles(server, directoryPath, forceRefresh = true)
+        .getOrThrow()
+        .sortedForCloud(
+            preferences = preferencesRepository().applicationPreferences.value,
+            serverId = server.id,
+        )
     val videos = files.filter { !it.isDirectory }
 
     return when (action) {
@@ -96,6 +129,49 @@ private suspend fun DebugCommandEntryPoint.runCloudMediaAction(
     }
 }
 
+private suspend fun DebugCommandEntryPoint.runCloudQuickSettingsAction(
+    action: String,
+    target: String?,
+    extras: Bundle,
+): Bundle {
+    val command = "cloud.quick_settings.$action"
+    val server = remoteServerRepository().getById(extras.requiredServerId()) ?: error("Cloud server not found")
+    return when (action) {
+        "get" -> {
+            val settings = preferencesRepository().applicationPreferences.value.cloudQuickSettings(server.id)
+            debugResult(
+                isOk = true,
+                message = settings.debugSummary(server.id),
+                command = command,
+                target = target,
+                value = settings.debugSummary(server.id),
+            )
+        }
+        "set" -> {
+            val settingTarget = target?.takeIf { it.isNotBlank() }
+                ?: extras.getString("target")?.takeIf { it.isNotBlank() }
+                ?: error("Missing cloud quick setting target")
+            var updatedSettings = CloudQuickSettings()
+            preferencesRepository().updateApplicationPreferences { preferences ->
+                val current = preferences.cloudQuickSettings(server.id)
+                updatedSettings = current.updated(settingTarget, extras).normalized()
+                preferences.withCloudQuickSettings(
+                    serverId = server.id,
+                    settings = updatedSettings,
+                )
+            }
+            debugResult(
+                isOk = true,
+                message = updatedSettings.debugSummary(server.id),
+                command = command,
+                target = settingTarget,
+                value = updatedSettings.debugSummary(server.id),
+            )
+        }
+        else -> error("Unknown cloud quick settings action: $action")
+    }
+}
+
 private fun Bundle.requiredServerId(): Long {
     getString("server_id")?.toLongOrNull()?.let { return it }
     getString(EXTRA_ID)?.toLongOrNull()?.let { return it }
@@ -103,6 +179,40 @@ private fun Bundle.requiredServerId(): Long {
     getLong(EXTRA_ID, 0L).takeIf { it > 0L }?.let { return it }
     getInt("server_id", 0).takeIf { it > 0 }?.let { return it.toLong() }
     return requiredLong(EXTRA_ID)
+}
+
+private fun CloudQuickSettings.updated(
+    target: String,
+    extras: Bundle,
+): CloudQuickSettings = when (target) {
+    "layout_mode" -> copy(mediaLayoutMode = enumValue<MediaLayoutMode>(extras.requiredString(EXTRA_VALUE)))
+    "layout_scale" -> withMediaLayoutScale(extras.requiredFloat(EXTRA_VALUE))
+    "sort_by" -> {
+        val sortBy = enumValue<Sort.By>(extras.requiredString(EXTRA_VALUE))
+        if (sortBy !in CloudQuickSettings.SUPPORTED_SORT_OPTIONS) {
+            error("Unsupported cloud sort option: $sortBy")
+        }
+        copy(sortBy = sortBy)
+    }
+    "sort_order" -> copy(sortOrder = enumValue<Sort.Order>(extras.requiredString(EXTRA_VALUE)))
+    "field.extension" -> copy(shouldShowExtensionField = extras.requiredBoolean(EXTRA_ENABLED))
+    "field.path" -> copy(shouldShowPathField = extras.requiredBoolean(EXTRA_ENABLED))
+    "field.size" -> copy(shouldShowSizeField = extras.requiredBoolean(EXTRA_ENABLED))
+    "field.played_progress" -> copy(shouldShowPlayedProgress = extras.requiredBoolean(EXTRA_ENABLED))
+    else -> error("Unknown cloud quick setting target: $target")
+}
+
+private fun List<RemoteFile>.sortedForCloud(
+    preferences: ApplicationPreferences,
+    serverId: Long,
+): List<RemoteFile> {
+    val settings = preferences.cloudQuickSettings(serverId)
+    val comparator = Sort(
+        by = settings.sortBy,
+        order = settings.sortOrder,
+    ).remoteFileComparator()
+    val (folders, videos) = partition(RemoteFile::isDirectory)
+    return folders.sortedWith(comparator) + videos.sortedWith(comparator)
 }
 
 private fun List<RemoteFile>.requireTargetFile(extras: Bundle): RemoteFile {
@@ -130,6 +240,11 @@ private fun List<RemoteFile>.requireTargetFile(extras: Bundle): RemoteFile {
 }
 
 private fun RemoteFile.debugSummary(): String = "name=$name path=$path size=$size"
+
+private fun CloudQuickSettings.debugSummary(serverId: Long): String {
+    val fields = "extension:$shouldShowExtensionField,path:$shouldShowPathField,size:$shouldShowSizeField,played:$shouldShowPlayedProgress"
+    return "server_id=$serverId layout=$mediaLayoutMode scale=${normalizedMediaLayoutScale()} sort=$sortBy/$sortOrder fields=$fields"
+}
 
 private fun Bundle.resolveOpenDirectoryPath(defaultPath: String): String {
     getString(EXTRA_DIRECTORY_PATH)?.takeIf { it.isNotBlank() }?.let { return it }
