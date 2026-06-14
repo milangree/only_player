@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
+import android.os.Bundle
 import androidx.core.net.toUri
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -20,8 +21,11 @@ import one.only.player.feature.player.extensions.toActivityOrientation
 import one.only.player.feature.player.service.PlayerService
 import one.only.player.feature.videopicker.navigation.MediaPickerRoute
 import one.only.player.feature.videopicker.navigation.MediaPickerScreenMode
+import one.only.player.feature.videopicker.navigation.favoritesScreen
 import one.only.player.feature.videopicker.navigation.mediaPickerScreen
+import one.only.player.feature.videopicker.navigation.navigateToCloudBrowse
 import one.only.player.feature.videopicker.navigation.navigateToCloudHome
+import one.only.player.feature.videopicker.navigation.navigateToFavorites
 import one.only.player.feature.videopicker.navigation.navigateToMediaPickerScreen
 import one.only.player.feature.videopicker.navigation.navigateToRecycleBinScreen
 import one.only.player.feature.videopicker.navigation.navigateToSearch
@@ -60,6 +64,7 @@ fun NavGraphBuilder.mediaNavGraph(
             onRecycleBinClick = navController::navigateToRecycleBinScreen,
             onSearchClick = navController::navigateToSearch,
             onCloudClick = navController::navigateToCloudHome,
+            onFavoritesClick = navController::navigateToFavorites,
             onExitAppClick = {
                 context.stopService(Intent(context, PlayerService::class.java))
                 navController.popBackStack(MediaPickerRoute(), inclusive = false)
@@ -82,6 +87,31 @@ fun NavGraphBuilder.mediaNavGraph(
                 )
             },
         )
+
+        favoritesScreen(
+            onNavigateUp = navController::navigateUp,
+            onPlayLocalVideo = { uri ->
+                context.startPlayerActivity(uri = uri)
+            },
+            onOpenLocalFolder = { folderPath ->
+                navController.navigateToMediaPickerScreen(
+                    folderId = folderPath,
+                    screenMode = MediaPickerScreenMode.LIBRARY,
+                )
+            },
+            onOpenRemoteDirectory = { serverId, path ->
+                navController.navigateToCloudBrowse(serverId = serverId, initialPath = path)
+            },
+            onPlayRemoteVideo = { uri, headers, initialSubtitleDirectoryUri, playlist, playlistRemotePaths ->
+                context.startRemotePlayerActivity(
+                    uri = uri,
+                    headers = headers,
+                    initialSubtitleDirectoryUri = initialSubtitleDirectoryUri,
+                    playlist = playlist,
+                    playlistRemotePaths = playlistRemotePaths,
+                )
+            },
+        )
     }
 }
 
@@ -95,6 +125,31 @@ private fun Context.startPlayerActivity(
         data = uri
         launchOrientation?.takeIf { activityClass == PlayerActivity::class.java }?.let {
             putExtra(PlayerActivity.EXTRA_LAUNCH_ORIENTATION, it)
+        }
+    }
+    startActivity(intent)
+}
+
+private fun Context.startRemotePlayerActivity(
+    uri: Uri,
+    headers: Map<String, String>,
+    initialSubtitleDirectoryUri: Uri?,
+    playlist: List<Uri>,
+    playlistRemotePaths: List<String>,
+) {
+    val intent = Intent(this, PlayerActivity::class.java).apply {
+        action = Intent.ACTION_VIEW
+        data = uri
+        if (headers.isNotEmpty()) {
+            val headerBundle = Bundle().apply {
+                headers.forEach { (key, value) -> putString(key, value) }
+            }
+            putExtra("headers", headerBundle)
+        }
+        putExtra("initial_subtitle_directory_uri", initialSubtitleDirectoryUri)
+        if (playlist.size > 1) {
+            putParcelableArrayListExtra("video_list", ArrayList(playlist))
+            putStringArrayListExtra("video_remote_paths", ArrayList(playlistRemotePaths))
         }
     }
     startActivity(intent)

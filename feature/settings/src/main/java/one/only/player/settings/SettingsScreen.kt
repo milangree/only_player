@@ -4,43 +4,31 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import one.only.player.core.ui.R
 import one.only.player.core.ui.components.ClickablePreferenceItem
 import one.only.player.core.ui.components.ListSectionTitle
+import one.only.player.core.ui.components.NextSearchTopAppBar
 import one.only.player.core.ui.components.NextTopAppBar
 import one.only.player.core.ui.designsystem.NextIcons
 import one.only.player.core.ui.extensions.withBottomFallback
@@ -88,8 +76,11 @@ fun SettingsScreen(
                 label = "settings_top_bar",
             ) { isSearching ->
                 if (isSearching) {
-                    SettingsSearchBar(
+                    NextSearchTopAppBar(
                         query = searchQuery,
+                        placeholder = stringResource(R.string.search_settings),
+                        searchFieldTestTag = "settings_search_field",
+                        clearButtonTestTag = "btn_settings_search_clear",
                         onQueryChange = { searchQuery = it },
                         onClose = {
                             isSearchActive = false
@@ -155,65 +146,6 @@ fun SettingsScreen(
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsSearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClose: () -> Unit,
-) {
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    NextTopAppBar(
-        title = {
-            TextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text(stringResource(R.string.search_settings)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .testTag("settings_search_field"),
-            )
-        },
-        navigationIcon = {
-            FilledTonalIconButton(onClick = onClose) {
-                Icon(
-                    imageVector = NextIcons.ArrowBack,
-                    contentDescription = stringResource(R.string.navigate_up),
-                )
-            }
-        },
-        actions = {
-            if (query.isNotEmpty()) {
-                IconButton(
-                    modifier = Modifier.testTag("btn_settings_search_clear"),
-                    onClick = { onQueryChange("") },
-                ) {
-                    Icon(
-                        imageVector = NextIcons.Close,
-                        contentDescription = stringResource(R.string.search),
-                    )
-                }
-            }
-        },
-    )
 }
 
 private data class ResolvedSettingRow(

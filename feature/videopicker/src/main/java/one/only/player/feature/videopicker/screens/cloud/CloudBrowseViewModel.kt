@@ -6,7 +6,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.net.URLDecoder
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -19,14 +18,16 @@ import one.only.player.core.common.Dispatcher
 import one.only.player.core.common.NextDispatchers
 import one.only.player.core.common.Utils
 import one.only.player.core.data.models.RemotePlaybackInfo
-import one.only.player.core.data.remote.FtpClient
-import one.only.player.core.data.remote.SmbClient
-import one.only.player.core.data.remote.WebDavClient
+import one.only.player.core.data.remote.RemoteMediaResolver
+import one.only.player.core.data.repository.FavoriteRepository
 import one.only.player.core.data.repository.MediaRepository
 import one.only.player.core.data.repository.PreferencesRepository
 import one.only.player.core.data.repository.RemoteServerRepository
 import one.only.player.core.data.repository.buildRemoteFolderPlaybackAnchorKey
 import one.only.player.core.data.repository.buildRemotePlaybackStateKey
+import one.only.player.core.data.repository.toFavoriteRootItem
+import one.only.player.core.data.repository.toRemoteDirectoryFavoriteItem
+import one.only.player.core.data.repository.toRemoteFavoriteItem
 import one.only.player.core.media.info.RemoteMediaInfo
 import one.only.player.core.media.info.RemoteMediaInfoReader
 import one.only.player.core.model.ApplicationPreferences
@@ -40,10 +41,9 @@ class CloudBrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: RemoteServerRepository,
     private val mediaRepository: MediaRepository,
+    private val favoriteRepository: FavoriteRepository,
     private val preferencesRepository: PreferencesRepository,
-    private val webDavClient: WebDavClient,
-    private val smbClient: SmbClient,
-    private val ftpClient: FtpClient,
+    private val remoteMediaResolver: RemoteMediaResolver,
     private val remoteMediaInfoReader: RemoteMediaInfoReader,
     @Dispatcher(NextDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -71,6 +71,8 @@ class CloudBrowseViewModel @Inject constructor(
             CloudBrowseEvent.DismissFileInfo -> dismissFileInfo()
             CloudBrowseEvent.Retry -> loadCurrentDirectory(forceRefresh = true)
             CloudBrowseEvent.RefreshPlaybackStates -> loadPlaybackStates()
+            CloudBrowseEvent.AddCurrentDirectoryFavorite -> addCurrentDirectoryFavorite()
+            is CloudBrowseEvent.AddFavorite -> addFavorite(event.file)
         }
     }
 
@@ -81,14 +83,14 @@ class CloudBrowseViewModel @Inject constructor(
                 _uiState.update { it.copy(isError = true, errorMessage = "Server not found") }
                 return@launch
             }
-            val serverRootPath = normalizeDirectoryPath(server, server.path)
-            val initialDirectoryPath = normalizeDirectoryPath(server, initialPath)
+            val serverRootPath = remoteMediaResolver.normalizeDirectoryPath(server, server.path)
+            val initialDirectoryPath = remoteMediaResolver.normalizeDirectoryPath(server, initialPath)
             val startPath = initialDirectoryPath.takeIf { it != "/" || serverRootPath == "/" } ?: serverRootPath
             _uiState.update {
                 it.copy(
                     server = server,
                     currentPath = startPath,
-                    isAtRoot = isAtServerRoot(startPath, server),
+                    isAtRoot = remoteMediaResolver.isAtServerRoot(startPath, server),
                 )
             }
             loadCurrentDirectory()
@@ -112,120 +114,37 @@ class CloudBrowseViewModel @Inject constructor(
         }
 
         viewModelScope.launch(ioDispatcher) {
-            when (server.protocol) {
-                ServerProtocol.WEBDAV -> loadWebDavDirectory(server, path, forceRefresh)
-                ServerProtocol.SMB -> loadSmbDirectory(server, path, forceRefresh)
-                ServerProtocol.FTP -> loadFtpDirectory(server, path, forceRefresh)
-            }
+            remoteMediaResolver.listBrowsableFiles(server, path, forceRefresh = forceRefresh)
+                .onSuccess { files ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            files = files,
+                            isError = false,
+                            errorMessage = "",
+                            playbackStates = emptyMap(),
+                            restoreTargetFilePath = null,
+                            hasLoadedDirectory = true,
+                        )
+                    }
+                    loadPlaybackStates(
+                        server = server,
+                        directoryPath = path,
+                        files = files,
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            isError = true,
+                            errorMessage = error.message ?: "Unknown error",
+                        )
+                    }
+                }
         }
-    }
-
-    private suspend fun loadWebDavDirectory(
-        server: RemoteServer,
-        path: String,
-        forceRefresh: Boolean,
-    ) {
-        webDavClient.listDirectory(server, path, forceRefresh = forceRefresh)
-            .onSuccess { files ->
-                val browsableFiles = files.filterBrowsableFiles()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        files = browsableFiles,
-                        isError = false,
-                        errorMessage = "",
-                        playbackStates = emptyMap(),
-                        restoreTargetFilePath = null,
-                        hasLoadedDirectory = true,
-                    )
-                }
-                loadPlaybackStates(
-                    server = server,
-                    directoryPath = path,
-                    files = browsableFiles,
-                )
-            }
-            .onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        isError = true,
-                        errorMessage = error.message ?: "Unknown error",
-                    )
-                }
-            }
-    }
-
-    private suspend fun loadSmbDirectory(
-        server: RemoteServer,
-        path: String,
-        forceRefresh: Boolean,
-    ) {
-        smbClient.listDirectory(server, path, forceRefresh = forceRefresh)
-            .onSuccess { files ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        files = files.filterBrowsableFiles(),
-                        isError = false,
-                        errorMessage = "",
-                        playbackStates = emptyMap(),
-                        restoreTargetFilePath = null,
-                        hasLoadedDirectory = true,
-                    )
-                }
-            }
-            .onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        isError = true,
-                        errorMessage = error.message ?: "Unknown error",
-                    )
-                }
-            }
-    }
-
-    private suspend fun loadFtpDirectory(
-        server: RemoteServer,
-        path: String,
-        forceRefresh: Boolean,
-    ) {
-        ftpClient.listDirectory(server, path, forceRefresh = forceRefresh)
-            .onSuccess { files ->
-                val browsableFiles = files.filterBrowsableFiles()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        files = browsableFiles,
-                        isError = false,
-                        errorMessage = "",
-                        playbackStates = emptyMap(),
-                        restoreTargetFilePath = null,
-                        hasLoadedDirectory = true,
-                    )
-                }
-                loadPlaybackStates(
-                    server = server,
-                    directoryPath = path,
-                    files = browsableFiles,
-                )
-            }
-            .onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        isError = true,
-                        errorMessage = error.message ?: "Unknown error",
-                    )
-                }
-            }
     }
 
     private fun loadPlaybackStates(
@@ -245,11 +164,7 @@ class CloudBrowseViewModel @Inject constructor(
             return
         }
 
-        val protocol = when (currentServer.protocol) {
-            ServerProtocol.WEBDAV -> "webdav"
-            ServerProtocol.SMB -> return
-            ServerProtocol.FTP -> "ftp"
-        }
+        val protocol = remoteMediaResolver.protocolKey(currentServer.protocol)
 
         val pathToKey = videoFiles.mapNotNull { file ->
             val key = buildRemotePlaybackStateKey(
@@ -288,89 +203,29 @@ class CloudBrowseViewModel @Inject constructor(
 
     fun buildPlayUrl(file: RemoteFile): String? {
         val server = _uiState.value.server ?: return null
-        return when (server.protocol) {
-            ServerProtocol.WEBDAV -> webDavClient.buildFileUrl(server, file.path)
-            ServerProtocol.SMB -> {
-                val port = server.port ?: 445
-                "smb://${server.host}:$port${file.path}"
-            }
-            ServerProtocol.FTP -> ftpClient.buildFileUrl(server, file.path)
-        }
+        return remoteMediaResolver.buildPlayUrl(server, file)
     }
 
     fun buildAllVideoPlayUrls(): List<Uri> {
         val server = _uiState.value.server ?: return emptyList()
-        return _uiState.value.files
-            .filter { !it.isDirectory }
-            .mapNotNull { file ->
-                when (server.protocol) {
-                    ServerProtocol.WEBDAV -> webDavClient.buildFileUrl(server, file.path)
-                    ServerProtocol.SMB -> {
-                        val port = server.port ?: 445
-                        "smb://${server.host}:$port${file.path}"
-                    }
-                    ServerProtocol.FTP -> ftpClient.buildFileUrl(server, file.path)
-                }
-            }
-            .map { Uri.parse(it) }
+        return remoteMediaResolver.buildVideoPlaylist(server, _uiState.value.files)
     }
+
+    fun buildAllVideoRemotePaths(): List<String> = remoteMediaResolver.buildVideoPlaylistRemotePaths(_uiState.value.files)
 
     fun buildCurrentDirectoryDocumentId(): String? {
         val server = _uiState.value.server ?: return null
-        val documentPath = if (isAtServerRoot(_uiState.value.currentPath, server)) {
-            "/"
-        } else {
-            _uiState.value.currentPath
-        }
-        return "${server.id}|${Uri.encode(documentPath)}"
+        return remoteMediaResolver.buildCurrentDirectoryDocumentId(server, _uiState.value.currentPath)
     }
 
     fun buildFileDocumentId(file: RemoteFile): String? {
         val server = _uiState.value.server ?: return null
-        return "${server.id}|${Uri.encode(file.path)}"
+        return remoteMediaResolver.buildDocumentId(server, file.path)
     }
 
     fun buildAuthHeaders(file: RemoteFile): Map<String, String> {
         val server = _uiState.value.server ?: return emptyMap()
-        return when (server.protocol) {
-            ServerProtocol.WEBDAV -> buildMap {
-                putAll(webDavClient.buildAuthHeaders(server))
-                put("_remote_server_id", server.id.toString())
-                put("_remote_file_path", file.path)
-                put("_remote_protocol", "webdav")
-                if (server.username.isNotBlank()) {
-                    put("_webdav_username", server.username)
-                    put("_webdav_password", server.password)
-                }
-            }
-
-            ServerProtocol.SMB -> buildMap {
-                if (server.username.isNotBlank()) {
-                    put("_smb_username", server.username)
-                    put("_smb_password", server.password)
-                }
-            }
-
-            ServerProtocol.FTP -> buildMap {
-                put("_remote_server_id", server.id.toString())
-                put("_remote_file_path", file.path)
-                put("_remote_protocol", "ftp")
-                if (server.username.isNotBlank()) {
-                    put("_ftp_username", server.username)
-                    put("_ftp_password", server.password)
-                }
-            }
-        }
-    }
-
-    private fun List<RemoteFile>.filterBrowsableFiles(): List<RemoteFile> = filter { file ->
-        file.isDirectory || file.hasBrowsableVideoExtension()
-    }
-
-    private fun RemoteFile.hasBrowsableVideoExtension(): Boolean {
-        val extension = name.substringAfterLast('.', missingDelimiterValue = "")
-        if (extension.isBlank()) return false
-        return extension.lowercase() in BROWSABLE_VIDEO_EXTENSIONS
+        return remoteMediaResolver.buildAuthHeaders(server, file)
     }
 
     private fun loadFileInfo(
@@ -425,13 +280,38 @@ class CloudBrowseViewModel @Inject constructor(
         }
     }
 
+    private fun addCurrentDirectoryFavorite() {
+        val server = _uiState.value.server ?: return
+        val currentPath = _uiState.value.currentPath
+        viewModelScope.launch {
+            if (remoteMediaResolver.isAtServerRoot(currentPath, server)) {
+                favoriteRepository.upsert(server.toFavoriteRootItem())
+            } else {
+                favoriteRepository.upsert(
+                    server.toRemoteDirectoryFavoriteItem(
+                        path = currentPath,
+                        title = currentPath.trimEnd('/').substringAfterLast('/').ifBlank { currentPath },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun addFavorite(file: RemoteFile) {
+        val server = _uiState.value.server ?: return
+        viewModelScope.launch {
+            favoriteRepository.upsert(file.toRemoteFavoriteItem(server))
+        }
+    }
+
     private fun buildProbeUrl(
         server: RemoteServer,
         file: RemoteFile,
     ): String? {
         val playUrl = when (server.protocol) {
-            ServerProtocol.WEBDAV -> webDavClient.buildFileUrl(server, file.path)
-            ServerProtocol.FTP -> ftpClient.buildFileUrl(server, file.path)
+            ServerProtocol.WEBDAV,
+            ServerProtocol.FTP,
+            -> remoteMediaResolver.buildPlayUrl(server, file)
             ServerProtocol.SMB -> return null
         }
         if (server.username.isBlank()) return playUrl
@@ -475,49 +355,6 @@ class CloudBrowseViewModel @Inject constructor(
         val parentPath = path.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
         return parentPath.ifBlank { "/" }
     }
-
-    private fun normalizeDirectoryPath(
-        server: RemoteServer,
-        path: String,
-    ): String = when (server.protocol) {
-        ServerProtocol.SMB -> SmbClient.normalizeRemotePath(path, isDirectory = true)
-        ServerProtocol.WEBDAV,
-        ServerProtocol.FTP,
-        -> path.ensureLeadingSlash().ensureTrailingSlash()
-    }
-
-    private fun isAtServerRoot(currentPath: String, server: RemoteServer): Boolean {
-        if (server.protocol == ServerProtocol.SMB) {
-            val current = SmbClient.normalizeRemotePath(currentPath, isDirectory = true).removeSuffix("/")
-            val root = SmbClient.normalizeRemotePath(server.path, isDirectory = true).removeSuffix("/")
-            return current.equals(root, ignoreCase = true)
-        }
-
-        val decodedCurrent = URLDecoder.decode(currentPath.removeSuffix("/"), "UTF-8")
-        val decodedRoot = URLDecoder.decode(normalizeDirectoryPath(server, server.path).removeSuffix("/"), "UTF-8")
-        return decodedCurrent == decodedRoot
-    }
-
-    private fun String.ensureLeadingSlash(): String = if (startsWith('/')) this else "/$this"
-
-    private fun String.ensureTrailingSlash(): String = if (endsWith('/')) this else "$this/"
-
-    companion object {
-        private val BROWSABLE_VIDEO_EXTENSIONS = setOf(
-            "3gp",
-            "avi",
-            "flv",
-            "m2ts",
-            "m4v",
-            "mkv",
-            "mov",
-            "mp4",
-            "mts",
-            "ts",
-            "webm",
-            "wmv",
-        )
-    }
 }
 
 @Stable
@@ -547,4 +384,6 @@ sealed interface CloudBrowseEvent {
     data object DismissFileInfo : CloudBrowseEvent
     data object Retry : CloudBrowseEvent
     data object RefreshPlaybackStates : CloudBrowseEvent
+    data object AddCurrentDirectoryFavorite : CloudBrowseEvent
+    data class AddFavorite(val file: RemoteFile) : CloudBrowseEvent
 }

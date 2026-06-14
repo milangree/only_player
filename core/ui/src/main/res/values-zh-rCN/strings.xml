@@ -10,6 +10,8 @@
     <string name="appearance_name">外观</string>
     <string name="appearance_and_general_name">外观与通用</string>
     <string name="cancel">取消</string>
+    <string name="add">添加</string>
+    <string name="name">名称</string>
     <string name="disable">停用</string>
     <string name="error_playing_video">错误：无法播放视频</string>
     <string name="resume">继续播放</string>
@@ -72,6 +74,7 @@
     <string name="controls_unlock">解锁控件</string>
     <string name="controls_mute">静音</string>
     <string name="controls_unmute">取消静音</string>
+    <string name="controls_mark">标记</string>
     <string name="select_playback_speed">选择播放速度</string>
     <string name="size">大小</string>
     <string name="about_description">版本与设备信息</string>
@@ -195,6 +198,16 @@
     <string name="embedded_styles_desc">应用字幕文件（如 ASS 等）中存在的嵌入样式</string>
     <string name="embedded_styles">嵌入样式</string>
     <string name="controller_timeout">控制器超时</string>
+    <string name="controller_timeout_disabled">禁用</string>
+    <string name="controller_timeout_15_seconds">15 秒</string>
+    <string name="controller_timeout_1_minute">1 分钟</string>
+    <string name="controller_timeout_custom">自定义</string>
+    <string name="controller_timeout_custom_value">自定义：%1$s 秒</string>
+    <string name="controller_timeout_select">控制栏自动隐藏</string>
+    <string name="custom_controller_timeout">自定义超时</string>
+    <string name="enter_seconds">输入秒数</string>
+    <string name="dim_video_when_controls_visible">控制栏显示时压暗视频</string>
+    <string name="dim_video_when_controls_visible_description">在播放器控制栏后显示暗色遮罩</string>
     <string name="seek_increment">跳转增量</string>
     <string name="seconds">%1$s 秒</string>
     <string name="subtitle_text_encoding">字幕文本编码</string>
@@ -489,6 +502,16 @@
     <string name="tab_cloud">云端</string>
     <string name="tab_settings">设置</string>
     <string name="cloud_servers">云端服务器</string>
+    <string name="favorites">收藏夹</string>
+    <string name="search_favorites">搜索收藏</string>
+    <string name="no_favorites">暂无收藏</string>
+    <string name="add_to_favorites">添加到收藏夹</string>
+    <string name="add_favorite_folder">添加收藏夹文件夹</string>
+    <string name="favorites_root">收藏夹根目录</string>
+    <string name="move_favorite">移动收藏</string>
+    <string name="delete_favorite">删除收藏</string>
+    <string name="delete_favorite_description">只会删除收藏记录，不会改动源文件。</string>
+    <string name="delete_favorite_folder_description">会删除此收藏夹文件夹及其中项目，不会改动源文件。</string>
     <string name="no_servers_configured">暂无配置</string>
     <string name="add_server">添加服务器</string>
     <string name="edit_server">编辑服务器</string>
@@ -519,4 +542,8 @@
     <string name="screenshot_saved">截图已保存到 Pictures/Screenshots</string>
     <string name="screenshot_failed">截图保存失败</string>
     <string name="customize_player_controls">自定义控件</string>
+    <string name="playback_marks">播放标记</string>
+    <string name="add_playback_mark">添加标记</string>
+    <string name="no_playback_marks">暂无标记</string>
+    <string name="delete_mark">删除标记</string>
 </resources>

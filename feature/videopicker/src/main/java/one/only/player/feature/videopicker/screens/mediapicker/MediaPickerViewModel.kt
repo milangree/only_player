@@ -17,9 +17,11 @@ import kotlinx.coroutines.launch
 import one.only.player.core.common.extensions.canonicalPathOrSelf
 import one.only.player.core.common.extensions.prettyName
 import one.only.player.core.common.hasManageExternalStorageAccess
+import one.only.player.core.data.repository.FavoriteRepository
 import one.only.player.core.data.repository.MediaMoveSummary
 import one.only.player.core.data.repository.MediaRepository
 import one.only.player.core.data.repository.PreferencesRepository
+import one.only.player.core.data.repository.toFavoriteItem
 import one.only.player.core.domain.GetSortedMediaUseCase
 import one.only.player.core.media.services.MediaService
 import one.only.player.core.media.sync.MediaInfoSynchronizer
@@ -38,6 +40,7 @@ class MediaPickerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val mediaService: MediaService,
     private val mediaRepository: MediaRepository,
+    private val favoriteRepository: FavoriteRepository,
     private val preferencesRepository: PreferencesRepository,
     private val mediaInfoSynchronizer: MediaInfoSynchronizer,
     private val mediaSynchronizer: MediaSynchronizer,
@@ -141,6 +144,7 @@ class MediaPickerViewModel @Inject constructor(
             is MediaPickerUiEvent.RestoreVideos -> restoreVideos(event.videos)
             is MediaPickerUiEvent.PermanentlyDeleteVideos -> permanentlyDeleteVideos(event.videos)
             is MediaPickerUiEvent.ShareVideos -> shareVideos(event.videos)
+            is MediaPickerUiEvent.AddFavorites -> addFavorites(event.videos, event.folders)
             is MediaPickerUiEvent.ExcludeFolders -> excludeFolders(event.paths)
             is MediaPickerUiEvent.Refresh -> refresh()
             is MediaPickerUiEvent.RenameVideo -> renameVideo(event.uri, event.to)
@@ -279,6 +283,16 @@ class MediaPickerViewModel @Inject constructor(
         }
     }
 
+    private fun addFavorites(
+        videos: List<Video>,
+        folders: List<Folder>,
+    ) {
+        viewModelScope.launch {
+            folders.forEach { folder -> favoriteRepository.upsert(folder.toFavoriteItem()) }
+            videos.forEach { video -> favoriteRepository.upsert(video.toFavoriteItem()) }
+        }
+    }
+
     private fun addToMediaInfoSynchronizer(uri: Uri) {
         mediaInfoSynchronizer.sync(uri)
     }
@@ -355,6 +369,10 @@ sealed interface MediaPickerUiEvent {
     data class RestoreVideos(val videos: List<String>) : MediaPickerUiEvent
     data class PermanentlyDeleteVideos(val videos: List<String>) : MediaPickerUiEvent
     data class ShareVideos(val videos: List<String>) : MediaPickerUiEvent
+    data class AddFavorites(
+        val videos: List<Video>,
+        val folders: List<Folder>,
+    ) : MediaPickerUiEvent
     data class ExcludeFolders(val paths: List<String>) : MediaPickerUiEvent
     data object Refresh : MediaPickerUiEvent
     data class RenameVideo(val uri: Uri, val to: String) : MediaPickerUiEvent

@@ -28,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -74,7 +75,7 @@ fun CloudBrowseRoute(
     viewModel: CloudBrowseViewModel = hiltViewModel(),
     onNavigateUp: () -> Unit,
     onDirectoryClick: (serverId: Long, path: String) -> Unit,
-    onPlayVideo: (uri: Uri, headers: Map<String, String>, initialSubtitleDirectoryUri: Uri?, playlist: List<Uri>) -> Unit,
+    onPlayVideo: (uri: Uri, headers: Map<String, String>, initialSubtitleDirectoryUri: Uri?, playlist: List<Uri>, playlistRemotePaths: List<String>) -> Unit,
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,7 +102,8 @@ fun CloudBrowseRoute(
                     DocumentsContract.buildDocumentUri("${context.packageName}.documents", documentId)
                 }
             val playlist = viewModel.buildAllVideoPlayUrls()
-            onPlayVideo(Uri.parse(url), headers, initialSubtitleDirectoryUri, playlist)
+            val playlistRemotePaths = viewModel.buildAllVideoRemotePaths()
+            onPlayVideo(Uri.parse(url), headers, initialSubtitleDirectoryUri, playlist, playlistRemotePaths)
         },
         onFileInfoClick = { file ->
             val documentUri = viewModel.buildFileDocumentId(file)
@@ -109,6 +111,12 @@ fun CloudBrowseRoute(
                     DocumentsContract.buildDocumentUri("${context.packageName}.documents", documentId)
                 } ?: return@CloudBrowseScreen
             viewModel.onEvent(CloudBrowseEvent.LoadFileInfo(file, documentUri))
+        },
+        onFavoriteCurrentDirectory = {
+            viewModel.onEvent(CloudBrowseEvent.AddCurrentDirectoryFavorite)
+        },
+        onFavoriteFile = { file ->
+            viewModel.onEvent(CloudBrowseEvent.AddFavorite(file))
         },
     )
 }
@@ -122,6 +130,8 @@ internal fun CloudBrowseScreen(
     onDirectoryClick: (String) -> Unit = {},
     onFileClick: (RemoteFile) -> Unit = {},
     onFileInfoClick: (RemoteFile) -> Unit = {},
+    onFavoriteCurrentDirectory: () -> Unit = {},
+    onFavoriteFile: (RemoteFile) -> Unit = {},
 ) {
     val serverName = uiState.server?.name?.takeIf { it.isNotBlank() }
         ?: uiState.server?.host
@@ -266,6 +276,13 @@ internal fun CloudBrowseScreen(
                             CloudSelectionActionsMenu(
                                 expanded = shouldShowSelectionMenu,
                                 onDismissRequest = { shouldShowSelectionMenu = false },
+                                onFavoriteAction = {
+                                    shouldShowSelectionMenu = false
+                                    val selectedPath = selectedFilePaths.firstOrNull() ?: return@CloudSelectionActionsMenu
+                                    val file = uiState.files.firstOrNull { it.path == selectedPath } ?: return@CloudSelectionActionsMenu
+                                    onFavoriteFile(file)
+                                    clearSelection()
+                                },
                                 onInfoAction = {
                                     shouldShowSelectionMenu = false
                                     val selectedPath = selectedFilePaths.firstOrNull() ?: return@CloudSelectionActionsMenu
@@ -273,6 +290,16 @@ internal fun CloudBrowseScreen(
                                     onFileInfoClick(file)
                                     clearSelection()
                                 },
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onFavoriteCurrentDirectory,
+                            modifier = Modifier.testTag("btn_cloud_favorite_current_directory"),
+                        ) {
+                            Icon(
+                                imageVector = NextIcons.LibraryBooks,
+                                contentDescription = stringResource(R.string.add_to_favorites),
                             )
                         }
                     }
@@ -516,6 +543,7 @@ private fun RemoteFileItem(
 private fun CloudSelectionActionsMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
+    onFavoriteAction: () -> Unit,
     onInfoAction: () -> Unit,
 ) {
     DropdownMenu(
@@ -531,6 +559,12 @@ private fun CloudSelectionActionsMenu(
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
         ),
     ) {
+        CloudSelectionMenuItem(
+            text = stringResource(id = R.string.add_to_favorites),
+            icon = NextIcons.LibraryBooks,
+            testTag = "item_cloud_selection_add_favorites",
+            onClick = onFavoriteAction,
+        )
         CloudSelectionMenuItem(
             text = stringResource(id = R.string.info),
             icon = NextIcons.Info,

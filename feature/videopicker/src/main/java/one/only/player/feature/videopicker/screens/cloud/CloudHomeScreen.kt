@@ -156,6 +156,7 @@ internal fun CloudHomeScreen(
                                 isFirstItem = index == 0,
                                 isLastItem = index == uiState.servers.lastIndex,
                                 onClick = { onServerClick(server.id) },
+                                onFavoriteClick = { onEvent(CloudHomeEvent.AddServerRootFavorite(server)) },
                                 onEditClick = { editingServer = server },
                                 onDeleteClick = { deletingServer = server },
                             )
@@ -247,6 +248,7 @@ private fun ServerListItem(
     isFirstItem: Boolean,
     isLastItem: Boolean,
     onClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
@@ -269,6 +271,12 @@ private fun ServerListItem(
         },
         trailingContent = {
             Row {
+                IconButton(onClick = onFavoriteClick) {
+                    Icon(
+                        imageVector = NextIcons.LibraryBooks,
+                        contentDescription = stringResource(R.string.add_to_favorites),
+                    )
+                }
                 IconButton(onClick = onEditClick) {
                     Icon(
                         imageVector = NextIcons.Edit,

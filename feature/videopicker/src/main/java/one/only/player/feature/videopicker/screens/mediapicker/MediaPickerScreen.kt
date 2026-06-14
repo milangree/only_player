@@ -109,6 +109,7 @@ fun MediaPickerRoute(
     onRecycleBinClick: () -> Unit,
     onSearchClick: () -> Unit,
     onCloudClick: () -> Unit,
+    onFavoritesClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onExitAppClick: () -> Unit,
     onNavigateUp: () -> Unit,
@@ -126,6 +127,7 @@ fun MediaPickerRoute(
         onRecycleBinClick = onRecycleBinClick,
         onSearchClick = onSearchClick,
         onCloudClick = onCloudClick,
+        onFavoritesClick = onFavoritesClick,
         onSettingsClick = onSettingsClick,
         onExitAppClick = onExitAppClick,
         onEvent = viewModel::onEvent,
@@ -154,6 +156,7 @@ internal fun MediaPickerScreen(
     onRecycleBinClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onCloudClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onExitAppClick: () -> Unit = {},
     onEvent: (MediaPickerUiEvent) -> Unit = {},
@@ -335,6 +338,7 @@ internal fun MediaPickerScreen(
                                 deleteAction = deleteAction,
                                 shouldShowRestoreAction = isRecycleBinMode,
                                 shouldShowMoveAction = isLibraryMode,
+                                shouldShowFavoriteAction = isLibraryMode,
                                 shouldShowRenameAction = selectionManager.isSingleVideoSelected && isLibraryMode,
                                 shouldShowInfoAction = selectionManager.isSingleVideoSelected,
                                 shouldShowExcludeAction = selectionManager.selectedFolders.isNotEmpty() && isLibraryMode,
@@ -361,6 +365,18 @@ internal fun MediaPickerScreen(
                                             folderPaths = selectionManager.selectedFolders.map { it.path },
                                         ),
                                     )
+                                    selectionManager.exitSelectionMode()
+                                },
+                                onFavoriteAction = {
+                                    shouldShowSelectionMenu = false
+                                    val rootFolder = (uiState.mediaDataState as? DataState.Success)?.value ?: return@SelectionActionsMenu
+                                    val selectedVideos = selectionManager.selectedVideos.mapNotNull { selectedVideo ->
+                                        rootFolder.allMediaList.firstOrNull { video -> video.uriString == selectedVideo.uriString }
+                                    }
+                                    val selectedFolders = selectionManager.selectedFolders.mapNotNull { selectedFolder ->
+                                        rootFolder.folderList.firstOrNull { folder -> folder.path == selectedFolder.path }
+                                    }
+                                    onEvent(MediaPickerUiEvent.AddFavorites(selectedVideos, selectedFolders))
                                     selectionManager.exitSelectionMode()
                                 },
                                 onShareAction = {
@@ -472,6 +488,15 @@ internal fun MediaPickerScreen(
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                                         thickness = 1.dp,
                                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f),
+                                    )
+                                    MainMenuItem(
+                                        text = stringResource(id = R.string.favorites),
+                                        icon = NextIcons.LibraryBooks,
+                                        testTag = "item_main_menu_favorites",
+                                        onClick = {
+                                            shouldShowMainMenu = false
+                                            onFavoritesClick()
+                                        },
                                     )
                                     MainMenuItem(
                                         text = stringResource(id = R.string.cloud_servers),
@@ -922,6 +947,7 @@ private fun SelectionActionsMenu(
     deleteAction: MediaPickerDeleteAction,
     shouldShowRestoreAction: Boolean,
     shouldShowMoveAction: Boolean,
+    shouldShowFavoriteAction: Boolean,
     shouldShowRenameAction: Boolean,
     shouldShowInfoAction: Boolean,
     shouldShowExcludeAction: Boolean,
@@ -929,6 +955,7 @@ private fun SelectionActionsMenu(
     onRenameAction: () -> Unit,
     onInfoAction: () -> Unit,
     onMoveAction: () -> Unit,
+    onFavoriteAction: () -> Unit,
     onShareAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onExcludeAction: () -> Unit,
@@ -960,6 +987,14 @@ private fun SelectionActionsMenu(
                 icon = NextIcons.Folder,
                 testTag = "item_selection_move",
                 onClick = onMoveAction,
+            )
+        }
+        if (shouldShowFavoriteAction) {
+            MainMenuItem(
+                text = stringResource(id = R.string.add_to_favorites),
+                icon = NextIcons.LibraryBooks,
+                testTag = "item_selection_add_favorites",
+                onClick = onFavoriteAction,
             )
         }
         if (shouldShowRenameAction) {

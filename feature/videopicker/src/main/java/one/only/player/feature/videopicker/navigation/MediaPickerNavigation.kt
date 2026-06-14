@@ -66,6 +66,7 @@ fun NavGraphBuilder.mediaPickerScreen(
     onRecycleBinClick: () -> Unit,
     onSearchClick: () -> Unit,
     onCloudClick: () -> Unit,
+    onFavoritesClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onExitAppClick: () -> Unit,
 ) {
@@ -79,6 +80,7 @@ fun NavGraphBuilder.mediaPickerScreen(
             onRecycleBinClick = onRecycleBinClick,
             onSearchClick = onSearchClick,
             onCloudClick = onCloudClick,
+            onFavoritesClick = onFavoritesClick,
             onSettingsClick = onSettingsClick,
             onExitAppClick = onExitAppClick,
         )

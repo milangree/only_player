@@ -38,6 +38,16 @@
     <string name="descending">遞減</string>
     <string name="autoplay_settings_description">自動播放在目前資料夾中下一個影片</string>
     <string name="controller_timeout">控制器逾時</string>
+    <string name="controller_timeout_disabled">停用</string>
+    <string name="controller_timeout_15_seconds">15 秒</string>
+    <string name="controller_timeout_1_minute">1 分鐘</string>
+    <string name="controller_timeout_custom">自訂</string>
+    <string name="controller_timeout_custom_value">自訂：%1$s 秒</string>
+    <string name="controller_timeout_select">控制列自動隱藏</string>
+    <string name="custom_controller_timeout">自訂逾時</string>
+    <string name="enter_seconds">輸入秒數</string>
+    <string name="dim_video_when_controls_visible">控制列顯示時壓暗影片</string>
+    <string name="dim_video_when_controls_visible_description">在播放器控制列後顯示暗色遮罩</string>
     <string name="no_videos_found">沒有找到影片</string>
     <string name="no">否</string>
     <string name="date">日期</string>
@@ -53,6 +63,7 @@
     <string name="controls_unlock">解鎖控制元件</string>
     <string name="controls_mute">靜音</string>
     <string name="controls_unmute">取消靜音</string>
+    <string name="controls_mark">標記</string>
     <string name="subtitle_background">字幕背景</string>
     <string name="on">開啟</string>
     <string name="subtitle_text_bold_desc">使用粗體文字於字幕</string>
@@ -162,6 +173,8 @@
     <string name="light_theme">亮色主題</string>
     <string name="dark_theme">暗色主題</string>
     <string name="cancel">取消</string>
+    <string name="add">新增</string>
+    <string name="name">名稱</string>
     <string name="extension">副檔名</string>
     <string name="permission_settings">Only Player 應用程式需要 \"%1$s\" 權限以存取或播放媒體。沒有它，媒體存取與播放功能將無法工作。要完整地使用此應用程式，請從設定中授予權限，因為它已經被永久地拒絕。</string>
     <string name="monospace">等寬字型</string>
@@ -483,6 +496,16 @@
     <string name="tab_cloud">雲端</string>
     <string name="tab_settings">設定</string>
     <string name="cloud_servers">雲端伺服器</string>
+    <string name="favorites">收藏夾</string>
+    <string name="search_favorites">搜尋收藏</string>
+    <string name="no_favorites">暫無收藏</string>
+    <string name="add_to_favorites">新增到收藏夾</string>
+    <string name="add_favorite_folder">新增收藏夾資料夾</string>
+    <string name="favorites_root">收藏夾根目錄</string>
+    <string name="move_favorite">移動收藏</string>
+    <string name="delete_favorite">刪除收藏</string>
+    <string name="delete_favorite_description">只會刪除收藏記錄，不會更動來源檔案。</string>
+    <string name="delete_favorite_folder_description">會刪除此收藏夾資料夾及其中項目，不會更動來源檔案。</string>
     <string name="no_servers_configured">暫無設定</string>
     <string name="add_server">新增伺服器</string>
     <string name="edit_server">編輯伺服器</string>
@@ -513,4 +536,8 @@
     <string name="screenshot_saved">截圖已儲存到 Pictures/Screenshots</string>
     <string name="screenshot_failed">截圖儲存失敗</string>
     <string name="customize_player_controls">自訂控制項</string>
+    <string name="playback_marks">播放標記</string>
+    <string name="add_playback_mark">新增標記</string>
+    <string name="no_playback_marks">暫無標記</string>
+    <string name="delete_mark">刪除標記</string>
 </resources>
