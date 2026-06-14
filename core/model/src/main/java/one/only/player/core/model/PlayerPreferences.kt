@@ -180,6 +180,7 @@ enum class PlayerControl {
     PLAY_PAUSE,
     NEXT,
     LOCK,
+    MUTE,
     SCALE,
     DECODER,
     AMBIENCE_MODE,

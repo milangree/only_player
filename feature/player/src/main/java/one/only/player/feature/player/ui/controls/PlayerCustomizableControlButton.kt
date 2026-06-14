@@ -35,11 +35,13 @@ internal fun PlayerCustomizableControlButton(
     isBeingDragged: Boolean = false,
     isOutlineOnly: Boolean = false,
     shouldHideLabel: Boolean = false,
+    isMuted: Boolean,
     onPlaylistClick: () -> Unit,
     onPlaybackSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onLockControlsClick: () -> Unit,
+    onMuteClick: () -> Unit,
     onVideoContentScaleClick: () -> Unit,
     onVideoContentScaleLongClick: () -> Unit,
     onDecoderClick: () -> Unit,
@@ -62,7 +64,7 @@ internal fun PlayerCustomizableControlButton(
     val isSelected = isCustomizingControls && control in visiblePlayerControls
     val isPlaceholder = isBeingDragged || isOutlineOnly
     val shouldShowLabel = isCustomizingControls || !shouldHideLabel
-    val label = control.label().takeIf { shouldShowLabel }
+    val label = control.label(isMuted).takeIf { shouldShowLabel }
     val buttonModifier = modifier
 
     when (control) {
@@ -147,6 +149,23 @@ internal fun PlayerCustomizableControlButton(
                 Icon(
                     painter = painterResource(R.drawable.ic_lock_open),
                     contentDescription = "btn_lock",
+                )
+            }
+        }
+
+        PlayerControl.MUTE -> {
+            PlayerButton(
+                modifier = buttonModifier,
+                onClick = onMuteClick,
+                isSelected = isSelected,
+                label = label,
+                shouldDimWhenUnselected = isCustomizingControls,
+                shouldShowCustomizeFrame = isCustomizingControls,
+                isOutlineOnly = isPlaceholder,
+            ) {
+                Icon(
+                    painter = painterResource(if (isMuted) R.drawable.ic_mute else R.drawable.ic_volume),
+                    contentDescription = if (isMuted) "btn_unmute" else "btn_mute",
                 )
             }
         }
@@ -362,12 +381,13 @@ internal fun PlayerCustomizableControlButton(
 }
 
 @Composable
-private fun PlayerControl.label(): String = when (this) {
+private fun PlayerControl.label(isMuted: Boolean): String = when (this) {
     PlayerControl.PLAYLIST -> stringResource(R.string.now_playing)
     PlayerControl.PLAYBACK_SPEED -> stringResource(R.string.speed)
     PlayerControl.AUDIO -> stringResource(R.string.audio)
     PlayerControl.SUBTITLE -> stringResource(R.string.subtitle)
     PlayerControl.LOCK -> stringResource(R.string.controls_lock)
+    PlayerControl.MUTE -> stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute)
     PlayerControl.SCALE -> stringResource(R.string.video_zoom)
     PlayerControl.DECODER -> stringResource(R.string.decoder)
     PlayerControl.AMBIENCE_MODE -> stringResource(R.string.ambience_mode)

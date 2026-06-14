@@ -86,6 +86,13 @@ class VolumeState(
     var volumePercentage: Int by mutableIntStateOf(calculateVolumePercentage())
         private set
 
+    private var lastUnmutedVolume: Int = audioManager.currentStreamVolume
+        .takeIf { it > 0 }
+        ?: defaultUnmutedVolume
+
+    val isMuted: Boolean
+        get() = currentVolume == 0
+
     fun updateVolumePercentage(percentage: Int) {
         val maxPercentage = if (isVolumeBoostEnabled) {
             MAX_VOLUME_PERCENTAGE_BOOST
@@ -107,6 +114,16 @@ class VolumeState(
         setVolume(currentVolume - 1, shouldShowVolumePanel)
     }
 
+    fun toggleMute() {
+        if (isMuted) {
+            setVolume(lastUnmutedVolume.coerceIn(1, maximumAllowedVolume))
+            return
+        }
+
+        lastUnmutedVolume = currentVolume.coerceAtLeast(1)
+        setVolume(0)
+    }
+
     fun handleLifecycle(disposableEffectScope: DisposableEffectScope): DisposableEffectResult = with(disposableEffectScope) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -115,6 +132,9 @@ class VolumeState(
                     if (currentVolume > systemMaxVolume && systemVolume == systemMaxVolume) return
                     currentVolume = systemVolume
                     volumePercentage = calculateVolumePercentage()
+                    if (systemVolume > 0) {
+                        lastUnmutedVolume = systemVolume
+                    }
                     if (isVolumeBoostEnabled) {
                         applyVolumeBoost(0)
                     }
@@ -160,6 +180,9 @@ class VolumeState(
         val clampedVolume = volume.coerceIn(0, maximumAllowedVolume)
         currentVolume = clampedVolume
         volumePercentage = calculateVolumePercentage()
+        if (clampedVolume > 0) {
+            lastUnmutedVolume = clampedVolume
+        }
 
         Logger.debug(TAG, "Set player volume: current=$clampedVolume, percentage=$volumePercentage, boostEnabled=$isVolumeBoostEnabled")
 
@@ -180,6 +203,9 @@ class VolumeState(
 
     private val maximumAllowedVolume: Int
         get() = if (isVolumeBoostEnabled) systemMaxVolume * 2 else maxVolume
+
+    private val defaultUnmutedVolume: Int
+        get() = (systemMaxVolume * DEFAULT_UNMUTE_VOLUME_PERCENTAGE / MAX_VOLUME_PERCENTAGE_NORMAL).coerceAtLeast(1)
 
     private fun setSystemVolume(volume: Int, shouldShowVolumePanel: Boolean) {
         val shouldShowUi = shouldShowVolumePanel || (shouldShowVolumePanelIfHeadsetIsOn && audioManager.isHeadsetOn)
@@ -221,5 +247,6 @@ class VolumeState(
         private const val MAX_VOLUME_PERCENTAGE_NORMAL = 100
         private const val MAX_VOLUME_PERCENTAGE_BOOST = 200
         private const val MAX_BOOST_GAIN_MB = 2000
+        private const val DEFAULT_UNMUTE_VOLUME_PERCENTAGE = 50
     }
 }

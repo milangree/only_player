@@ -941,6 +941,14 @@ internal fun MediaPlayerScreen(
                                                 controlsVisibilityState.lockControls()
                                             }
                                         },
+                                        isMuted = volumeState.isMuted,
+                                        onMuteClick = {
+                                            if (isCustomizingControls) {
+                                                toggleControlVisibility(PlayerControl.MUTE)
+                                            } else {
+                                                volumeState.toggleMute()
+                                            }
+                                        },
                                         onVideoContentScaleClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.SCALE)
@@ -1155,6 +1163,14 @@ internal fun MediaPlayerScreen(
                                                 controlsVisibilityState.lockControls()
                                             }
                                         },
+                                        isMuted = volumeState.isMuted,
+                                        onMuteClick = {
+                                            if (isCustomizingControls) {
+                                                toggleControlVisibility(PlayerControl.MUTE)
+                                            } else {
+                                                volumeState.toggleMute()
+                                            }
+                                        },
                                         onVideoContentScaleClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.SCALE)
@@ -1229,6 +1245,8 @@ internal fun MediaPlayerScreen(
                                 onAudioClick = { },
                                 onSubtitleClick = { },
                                 onLockControlsClick = { },
+                                isMuted = volumeState.isMuted,
+                                onMuteClick = { },
                                 onVideoContentScaleClick = { },
                                 onVideoContentScaleLongClick = { },
                                 onDecoderClick = { },
@@ -1331,6 +1349,7 @@ internal fun MediaPlayerScreen(
                     when (route) {
                         MenuRoute.Root -> MenuRootContent(
                             isLockEnabled = controlsVisibilityState.isControlsLocked,
+                            isMuted = volumeState.isMuted,
                             isAmbienceModeEnabled = isAmbienceModeEnabled,
                             isVideoMirrored = isVideoMirrored,
                             isPipSupported = pictureInPictureState.isPipSupported,
@@ -1339,6 +1358,10 @@ internal fun MediaPlayerScreen(
                             onLockClick = {
                                 controlsVisibilityState.showControls()
                                 controlsVisibilityState.lockControls()
+                                dismissOverlay()
+                            },
+                            onMuteClick = {
+                                volumeState.toggleMute()
                                 dismissOverlay()
                             },
                             onAmbienceClick = {

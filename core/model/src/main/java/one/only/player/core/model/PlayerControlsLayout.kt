@@ -27,9 +27,10 @@ data class PlayerControlLayoutEntry(
 @Serializable(with = PlayerControlsLayoutSerializer::class)
 class PlayerControlsLayout(
     entries: List<PlayerControlLayoutEntry> = defaultEntries(),
+    version: Int = CURRENT_VERSION,
 ) {
 
-    val entries: List<PlayerControlLayoutEntry> = normalizeEntries(entries)
+    val entries: List<PlayerControlLayoutEntry> = normalizeEntries(entries, version)
 
     fun controlsIn(zone: PlayerControlZone): List<PlayerControl> = entries
         .filter { it.zone == zone }
@@ -84,6 +85,7 @@ class PlayerControlsLayout(
 
         val bottomLeftControls: List<PlayerControl> = listOf(
             PlayerControl.LOCK,
+            PlayerControl.MUTE,
             PlayerControl.SCALE,
             PlayerControl.DECODER,
             PlayerControl.AMBIENCE_MODE,
@@ -98,6 +100,12 @@ class PlayerControlsLayout(
 
         val customizableControls: Set<PlayerControl> =
             (topRightControls + bottomLeftControls).toSet()
+
+        internal const val CURRENT_VERSION = 2
+
+        private val introducedControlVersions: Map<PlayerControl, Int> = mapOf(
+            PlayerControl.MUTE to 2,
+        )
 
         fun defaultEntries(): List<PlayerControlLayoutEntry> = buildList {
             addAll(
@@ -118,16 +126,37 @@ class PlayerControlsLayout(
             )
         }
 
-        private fun normalizeEntries(entries: List<PlayerControlLayoutEntry>): List<PlayerControlLayoutEntry> {
+        private fun normalizeEntries(
+            entries: List<PlayerControlLayoutEntry>,
+            version: Int,
+        ): List<PlayerControlLayoutEntry> {
+            val controlsToReposition = introducedControlVersions
+                .filterValues { introducedVersion -> version < introducedVersion }
+                .keys
             val seenControls = mutableSetOf<PlayerControl>()
             val normalizedEntries = entries
                 .filter { it.control in customizableControls }
+                .filter { it.control !in controlsToReposition }
                 .filter { seenControls.add(it.control) }
                 .toMutableList()
+            val defaultEntries = defaultEntries()
+            val defaultControlIndexes = defaultEntries
+                .mapIndexed { index, entry -> entry.control to index }
+                .toMap()
 
-            defaultEntries().forEach { defaultEntry ->
-                if (defaultEntry.control in seenControls) return@forEach
-                normalizedEntries.add(defaultEntry)
+            defaultEntries.forEachIndexed { defaultIndex, defaultEntry ->
+                if (defaultEntry.control in seenControls) return@forEachIndexed
+                val insertAfter = normalizedEntries.indexOfLast { entry ->
+                    entry.zone == defaultEntry.zone && defaultControlIndexes.getValue(entry.control) < defaultIndex
+                }
+                val insertAt = when {
+                    insertAfter >= 0 -> insertAfter + 1
+                    else -> normalizedEntries.indexOfFirst { entry ->
+                        entry.zone == defaultEntry.zone && defaultControlIndexes.getValue(entry.control) > defaultIndex
+                    }.takeIf { it >= 0 } ?: normalizedEntries.size
+                }
+                normalizedEntries.add(insertAt, defaultEntry)
+                seenControls.add(defaultEntry.control)
             }
             return normalizedEntries
         }
@@ -139,6 +168,7 @@ object PlayerControlsLayoutSerializer : KSerializer<PlayerControlsLayout> {
 
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("one.only.player.core.model.PlayerControlsLayout") {
         element("entries", entriesSerializer.descriptor)
+        element<Int>("version")
     }
 
     override fun serialize(
@@ -152,11 +182,17 @@ object PlayerControlsLayoutSerializer : KSerializer<PlayerControlsLayout> {
                 serializer = entriesSerializer,
                 value = value.entries,
             )
+            encodeIntElement(
+                descriptor = descriptor,
+                index = 1,
+                value = PlayerControlsLayout.CURRENT_VERSION,
+            )
         }
     }
 
     override fun deserialize(decoder: Decoder): PlayerControlsLayout {
         var entries = PlayerControlsLayout.defaultEntries()
+        var version = 0
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -167,10 +203,17 @@ object PlayerControlsLayoutSerializer : KSerializer<PlayerControlsLayout> {
                         index = index,
                         deserializer = entriesSerializer,
                     )
+                    1 -> version = decodeIntElement(
+                        descriptor = descriptor,
+                        index = index,
+                    )
                 }
             }
         }
 
-        return PlayerControlsLayout(entries)
+        return PlayerControlsLayout(
+            entries = entries,
+            version = version,
+        )
     }
 }

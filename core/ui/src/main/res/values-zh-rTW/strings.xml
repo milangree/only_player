@@ -51,6 +51,8 @@
     <string name="group_videos">由資料夾分組影片</string>
     <string name="audio_desc">音訊播放選項</string>
     <string name="controls_unlock">解鎖控制元件</string>
+    <string name="controls_mute">靜音</string>
+    <string name="controls_unmute">取消靜音</string>
     <string name="subtitle_background">字幕背景</string>
     <string name="on">開啟</string>
     <string name="subtitle_text_bold_desc">使用粗體文字於字幕</string>

@@ -26,12 +26,14 @@ import one.only.player.core.ui.designsystem.NextIcons
 @Composable
 fun MenuRootContent(
     isLockEnabled: Boolean,
+    isMuted: Boolean,
     isAmbienceModeEnabled: Boolean,
     isVideoMirrored: Boolean,
     isPipSupported: Boolean,
     isTakingScreenshot: Boolean,
     onNavigate: (MenuRoute) -> Unit,
     onLockClick: () -> Unit,
+    onMuteClick: () -> Unit,
     onAmbienceClick: () -> Unit,
     onMirrorVideoClick: () -> Unit,
     onPictureInPictureClick: () -> Unit,
@@ -88,6 +90,13 @@ fun MenuRootContent(
             text = stringResource(if (isLockEnabled) R.string.controls_unlock else R.string.controls_lock),
             testTag = "menu_item_lock",
             onClick = onLockClick,
+        )
+        MenuItemRow(
+            icon = NextIcons.VolumeUp,
+            text = stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute),
+            testTag = "menu_item_mute",
+            onClick = onMuteClick,
+            isSelected = isMuted,
         )
         MenuItemRow(
             icon = NextIcons.Style,
