@@ -5,7 +5,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import one.only.player.core.database.dao.DirectoryDao
+import one.only.player.core.database.dao.FavoriteItemDao
 import one.only.player.core.database.dao.MediumDao
+import one.only.player.core.database.dao.PlaybackMarkDao
 import one.only.player.core.database.dao.RemoteServerDao
 
 @Module
@@ -23,4 +25,10 @@ object DaoModule {
 
     @Provides
     fun provideRemoteServerDao(db: MediaDatabase): RemoteServerDao = db.remoteServerDao()
+
+    @Provides
+    fun provideFavoriteItemDao(db: MediaDatabase): FavoriteItemDao = db.favoriteItemDao()
+
+    @Provides
+    fun providePlaybackMarkDao(db: MediaDatabase): PlaybackMarkDao = db.playbackMarkDao()
 }

@@ -32,6 +32,8 @@ class LocalMediaRepository @Inject constructor(
     private val directoryDao: DirectoryDao,
     private val mediaService: MediaService,
     private val mediaSynchronizer: MediaSynchronizer,
+    private val favoriteRepository: FavoriteRepository,
+    private val playbackMarkRepository: PlaybackMarkRepository,
 ) : MediaRepository {
 
     override fun getVideosFlow(): Flow<List<Video>> = mediumDao.getAllWithInfo().map { media ->
@@ -235,6 +237,17 @@ class LocalMediaRepository @Inject constructor(
                     originalFileName = currentState.originalFileName ?: medium.name,
                 ),
             )
+            playbackMarkRepository.updateMediaUri(
+                oldMediaUri = uriString,
+                newMediaUri = movedUriString,
+            )
+            favoriteRepository.updateLocalVideoTarget(
+                oldLocalUri = uriString,
+                newLocalUri = movedUriString,
+                newLocalPath = moved.path,
+                newTitle = moved.fileName,
+                newMediaStoreId = medium.mediaStoreId,
+            )
             mediaSynchronizer.refresh(moved.path)
         }
     }
@@ -306,11 +319,16 @@ class LocalMediaRepository @Inject constructor(
                 return@forEach
             }
 
+            val movedFolderPath = File(targetFolderPath, File(folderPath).name).path
             movedMedia.forEach { moved ->
                 val uriString = moved.originalPath?.let { originalPath -> mediumDao.getByPath(originalPath)?.uriString } ?: return@forEach
                 updateMovedMedium(uriString, moved)
                 mediaSynchronizer.registerManualVideoPath(moved.path)
             }
+            favoriteRepository.updateLocalFolderPath(
+                oldPath = folderPath,
+                newPath = movedFolderPath,
+            )
             mediaSynchronizer.refresh()
             movedCount++
             onProgress(movedCount + failedCount)
@@ -359,6 +377,17 @@ class LocalMediaRepository @Inject constructor(
                     originalFileName = null,
                 ),
             )
+            playbackMarkRepository.updateMediaUri(
+                oldMediaUri = uriString,
+                newMediaUri = restoredUriString,
+            )
+            favoriteRepository.updateLocalVideoTarget(
+                oldLocalUri = uriString,
+                newLocalUri = restoredUriString,
+                newLocalPath = restored.path,
+                newTitle = restored.fileName,
+                newMediaStoreId = medium.mediaStoreId,
+            )
             mediaSynchronizer.refresh(restored.path)
         }
     }
@@ -388,6 +417,17 @@ class LocalMediaRepository @Inject constructor(
         currentState?.let { state ->
             mediumStateDao.upsert(state.copy(uriString = movedUriString))
         }
+        playbackMarkRepository.updateMediaUri(
+            oldMediaUri = uriString,
+            newMediaUri = movedUriString,
+        )
+        favoriteRepository.updateLocalVideoTarget(
+            oldLocalUri = uriString,
+            newLocalUri = movedUriString,
+            newLocalPath = moved.path,
+            newTitle = moved.fileName,
+            newMediaStoreId = medium.mediaStoreId,
+        )
     }
 
     private suspend fun findMediumWithInfo(uri: String): MediumWithInfo? {

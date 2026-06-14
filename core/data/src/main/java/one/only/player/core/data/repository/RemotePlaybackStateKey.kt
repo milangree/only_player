@@ -3,7 +3,7 @@ package one.only.player.core.data.repository
 import android.net.Uri
 
 private const val REMOTE_PLAYBACK_STATE_PREFIX = "onlyplayer://remote"
-private val SUPPORTED_REMOTE_PROTOCOLS = setOf("webdav", "ftp")
+private val SUPPORTED_REMOTE_PROTOCOLS = setOf("webdav", "smb", "ftp")
 
 fun buildRemotePlaybackStateKey(
     remoteProtocol: String?,

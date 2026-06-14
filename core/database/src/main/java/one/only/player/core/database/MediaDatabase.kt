@@ -5,13 +5,17 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import one.only.player.core.database.dao.DirectoryDao
+import one.only.player.core.database.dao.FavoriteItemDao
 import one.only.player.core.database.dao.MediumDao
 import one.only.player.core.database.dao.MediumStateDao
+import one.only.player.core.database.dao.PlaybackMarkDao
 import one.only.player.core.database.dao.RemoteServerDao
 import one.only.player.core.database.entities.AudioStreamInfoEntity
 import one.only.player.core.database.entities.DirectoryEntity
+import one.only.player.core.database.entities.FavoriteItemEntity
 import one.only.player.core.database.entities.MediumEntity
 import one.only.player.core.database.entities.MediumStateEntity
+import one.only.player.core.database.entities.PlaybackMarkEntity
 import one.only.player.core.database.entities.RemoteServerEntity
 import one.only.player.core.database.entities.SubtitleStreamInfoEntity
 import one.only.player.core.database.entities.VideoStreamInfoEntity
@@ -25,8 +29,10 @@ import one.only.player.core.database.entities.VideoStreamInfoEntity
         AudioStreamInfoEntity::class,
         SubtitleStreamInfoEntity::class,
         RemoteServerEntity::class,
+        FavoriteItemEntity::class,
+        PlaybackMarkEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -38,6 +44,10 @@ abstract class MediaDatabase : RoomDatabase() {
     abstract fun directoryDao(): DirectoryDao
 
     abstract fun remoteServerDao(): RemoteServerDao
+
+    abstract fun favoriteItemDao(): FavoriteItemDao
+
+    abstract fun playbackMarkDao(): PlaybackMarkDao
 
     companion object {
         const val DATABASE_NAME = "media_db"
@@ -228,6 +238,50 @@ abstract class MediaDatabase : RoomDatabase() {
                     )
                     """,
                 )
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `favorite_item` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `parent_id` INTEGER,
+                        `target_type` TEXT NOT NULL,
+                        `target_key` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `subtitle` TEXT NOT NULL,
+                        `local_uri` TEXT,
+                        `local_path` TEXT,
+                        `remote_server_id` INTEGER,
+                        `remote_protocol` TEXT,
+                        `remote_path` TEXT,
+                        `remote_server_name` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        `sort_order` INTEGER NOT NULL
+                    )
+                    """,
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_favorite_item_target_key` ON `favorite_item` (`target_key`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_favorite_item_parent_id` ON `favorite_item` (`parent_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_favorite_item_target_type` ON `favorite_item` (`target_type`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `playback_mark` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `media_uri` TEXT NOT NULL,
+                        `position_ms` INTEGER NOT NULL,
+                        `duration_ms` INTEGER NOT NULL,
+                        `label` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """,
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_playback_mark_media_uri_position_ms` ON `playback_mark` (`media_uri`, `position_ms`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_playback_mark_created_at` ON `playback_mark` (`created_at`)")
             }
         }
     }
