@@ -52,7 +52,9 @@ data class PlayerPreferences(
     val brightnessGestureSensitivity: Float = DEFAULT_BRIGHTNESS_GESTURE_SENSITIVITY,
 
     // 播放器界面
+    val controllerAutoHidePreset: ControllerAutoHidePreset = ControllerAutoHidePreset.CUSTOM,
     val controllerAutoHideTimeout: Int = DEFAULT_CONTROLLER_AUTO_HIDE_TIMEOUT,
+    val shouldDimVideoWhenControlsVisible: Boolean = true,
     val controlsStyle: PlayerControlsStyle = PlayerControlsStyle.MODERN,
     val controlButtonsPosition: ControlButtonsPosition = ControlButtonsPosition.LEFT,
     val playerControlsLayout: PlayerControlsLayout = PlayerControlsLayout(),
@@ -168,6 +170,13 @@ fun PlayerPreferences.withVideoFiltersFrom(preferences: PlayerPreferences): Play
     videoSharpening = preferences.videoSharpening,
 )
 
+fun PlayerPreferences.controllerAutoHideTimeoutSecondsOrNull(): Int? = when (controllerAutoHidePreset) {
+    ControllerAutoHidePreset.DISABLED -> null
+    ControllerAutoHidePreset.FIFTEEN_SECONDS -> 15
+    ControllerAutoHidePreset.ONE_MINUTE -> 60
+    ControllerAutoHidePreset.CUSTOM -> controllerAutoHideTimeout.coerceAtLeast(1)
+}
+
 @Serializable
 @Suppress("MagicNumber")
 enum class PlayerControl {
@@ -181,6 +190,7 @@ enum class PlayerControl {
     NEXT,
     LOCK,
     MUTE,
+    MARK,
     SCALE,
     DECODER,
     AMBIENCE_MODE,
@@ -192,4 +202,12 @@ enum class PlayerControl {
     SHUFFLE,
     SLEEP_TIMER,
     ROTATE,
+}
+
+@Serializable
+enum class ControllerAutoHidePreset {
+    DISABLED,
+    FIFTEEN_SECONDS,
+    ONE_MINUTE,
+    CUSTOM,
 }

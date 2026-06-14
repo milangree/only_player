@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import one.only.player.core.common.extensions.round
 import one.only.player.core.data.repository.PreferencesRepository
 import one.only.player.core.model.ControlButtonsPosition
+import one.only.player.core.model.ControllerAutoHidePreset
 import one.only.player.core.model.PlayerControl
 import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
@@ -51,9 +52,11 @@ class PlayerPreferencesViewModel @Inject constructor(
             is PlayerPreferencesUiEvent.UpdatePreferredPlayerOrientation -> updatePreferredPlayerOrientation(event.value)
             is PlayerPreferencesUiEvent.UpdatePreferredControlButtonsPosition -> updatePreferredControlButtonsPosition(event.value)
             is PlayerPreferencesUiEvent.UpdateDefaultPlaybackSpeed -> updateDefaultPlaybackSpeed(event.value)
+            is PlayerPreferencesUiEvent.UpdateControlAutoHidePreset -> updateControlAutoHidePreset(event.value)
             is PlayerPreferencesUiEvent.UpdateControlAutoHideTimeout -> updateControlAutoHideTimeout(event.value)
             is PlayerPreferencesUiEvent.UpdatePlayerIconStyle -> updatePlayerIconStyle(event.value)
             is PlayerPreferencesUiEvent.UpdateControlsStyle -> updateControlsStyle(event.value)
+            PlayerPreferencesUiEvent.ToggleDimVideoWhenControlsVisible -> toggleDimVideoWhenControlsVisible()
             PlayerPreferencesUiEvent.TogglePlayerControlLabels -> togglePlayerControlLabels()
             is PlayerPreferencesUiEvent.UpdateHiddenPlayerControls -> updateHiddenPlayerControls(event.value)
         }
@@ -152,7 +155,18 @@ class PlayerPreferencesViewModel @Inject constructor(
     private fun updateControlAutoHideTimeout(value: Int) {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
-                it.copy(controllerAutoHideTimeout = value)
+                it.copy(
+                    controllerAutoHidePreset = ControllerAutoHidePreset.CUSTOM,
+                    controllerAutoHideTimeout = value.coerceAtLeast(1),
+                )
+            }
+        }
+    }
+
+    private fun updateControlAutoHidePreset(value: ControllerAutoHidePreset) {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(controllerAutoHidePreset = value)
             }
         }
     }
@@ -181,6 +195,14 @@ class PlayerPreferencesViewModel @Inject constructor(
         }
     }
 
+    private fun toggleDimVideoWhenControlsVisible() {
+        viewModelScope.launch {
+            preferencesRepository.updatePlayerPreferences {
+                it.copy(shouldDimVideoWhenControlsVisible = !it.shouldDimVideoWhenControlsVisible)
+            }
+        }
+    }
+
     private fun updateHiddenPlayerControls(value: Set<PlayerControl>) {
         viewModelScope.launch {
             preferencesRepository.updatePlayerPreferences {
@@ -197,6 +219,8 @@ data class PlayerPreferencesUiState(
 )
 
 sealed interface PlayerPreferenceDialog {
+    data object ControllerAutoHideDialog : PlayerPreferenceDialog
+    data object ControllerAutoHideCustomDialog : PlayerPreferenceDialog
     data object PlayerScreenOrientationDialog : PlayerPreferenceDialog
     data object ControlButtonsDialog : PlayerPreferenceDialog
     data object PlayerIconStyleDialog : PlayerPreferenceDialog
@@ -215,8 +239,10 @@ sealed interface PlayerPreferencesUiEvent {
     data class UpdatePreferredPlayerOrientation(val value: ScreenOrientation) : PlayerPreferencesUiEvent
     data class UpdatePreferredControlButtonsPosition(val value: ControlButtonsPosition) : PlayerPreferencesUiEvent
     data class UpdateDefaultPlaybackSpeed(val value: Float) : PlayerPreferencesUiEvent
+    data class UpdateControlAutoHidePreset(val value: ControllerAutoHidePreset) : PlayerPreferencesUiEvent
     data class UpdateControlAutoHideTimeout(val value: Int) : PlayerPreferencesUiEvent
     data class UpdatePlayerIconStyle(val value: PlayerIconStyle) : PlayerPreferencesUiEvent
     data class UpdateControlsStyle(val value: PlayerControlsStyle) : PlayerPreferencesUiEvent
     data class UpdateHiddenPlayerControls(val value: Set<PlayerControl>) : PlayerPreferencesUiEvent
+    data object ToggleDimVideoWhenControlsVisible : PlayerPreferencesUiEvent
 }

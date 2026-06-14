@@ -44,6 +44,12 @@ class PlayerApi(val activity: PlayerActivity) {
         return playlist.map(Uri::toString)
     }
 
+    fun getPlaylistRemotePaths(): List<String> {
+        if (extras == null) return emptyList()
+        if (!extras.containsKey(API_PLAYLIST_REMOTE_PATHS)) return emptyList()
+        return extras.getStringArrayList(API_PLAYLIST_REMOTE_PATHS).orEmpty()
+    }
+
     fun getResult(isPlaybackFinished: Boolean, duration: Long, position: Long): Intent = Intent(API_RESULT_INTENT).apply {
         if (isPlaybackFinished) {
             putExtra(API_END_BY, API_END_BY_COMPLETION)
@@ -64,6 +70,7 @@ class PlayerApi(val activity: PlayerActivity) {
         const val API_SUBS_ENABLE = "subs.enable"
         const val API_SUBS_NAME = "subs.name"
         const val API_PLAYLIST = "video_list"
+        const val API_PLAYLIST_REMOTE_PATHS = "video_remote_paths"
 
         const val API_RESULT_INTENT = "com.mxtech.intent.result.VIEW"
 

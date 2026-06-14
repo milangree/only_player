@@ -19,11 +19,15 @@ import kotlinx.coroutines.launch
 import one.only.player.feature.player.extensions.togglePlayerSystemBars
 
 @Composable
-fun rememberControlsVisibilityState(player: Player, hideAfter: Duration): ControlsVisibilityState {
+fun rememberControlsVisibilityState(
+    player: Player,
+    hideAfter: Duration?,
+): ControlsVisibilityState {
     val activity = LocalActivity.current
     val coroutineScope = rememberCoroutineScope()
-    val controlsVisibilityState = remember { ControlsVisibilityState(player, hideAfter, coroutineScope) }
+    val controlsVisibilityState = remember(player) { ControlsVisibilityState(player, hideAfter, coroutineScope) }
     LaunchedEffect(player) { controlsVisibilityState.observe() }
+    LaunchedEffect(hideAfter) { controlsVisibilityState.updateHideAfter(hideAfter) }
     LaunchedEffect(controlsVisibilityState.isControlsVisible, controlsVisibilityState.isControlsLocked) {
         if (controlsVisibilityState.isControlsLocked) {
             activity?.togglePlayerSystemBars(shouldShowControls = false)
@@ -39,7 +43,7 @@ fun rememberControlsVisibilityState(player: Player, hideAfter: Duration): Contro
 @Stable
 class ControlsVisibilityState(
     private val player: Player,
-    private val hideAfter: Duration,
+    private var hideAfter: Duration?,
     private val scope: CoroutineScope,
 ) {
     private var autoHideControlsJob: Job? = null
@@ -50,7 +54,14 @@ class ControlsVisibilityState(
     var isControlsLocked: Boolean by mutableStateOf(false)
         private set
 
-    fun showControls(duration: Duration = hideAfter) {
+    fun updateHideAfter(duration: Duration?) {
+        hideAfter = duration
+        if (isControlsVisible && player.isPlaying) {
+            autoHideControls()
+        }
+    }
+
+    fun showControls(duration: Duration? = hideAfter) {
         isControlsVisible = true
         autoHideControls(duration)
     }
@@ -87,8 +98,9 @@ class ControlsVisibilityState(
         }
     }
 
-    private fun autoHideControls(duration: Duration = hideAfter) {
+    private fun autoHideControls(duration: Duration? = hideAfter) {
         autoHideControlsJob?.cancel()
+        if (duration == null || duration == Duration.INFINITE) return
         autoHideControlsJob = scope.launch {
             delay(duration)
             if (player.isPlaying) {

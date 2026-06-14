@@ -86,6 +86,7 @@ class PlayerControlsLayout(
         val bottomLeftControls: List<PlayerControl> = listOf(
             PlayerControl.LOCK,
             PlayerControl.MUTE,
+            PlayerControl.MARK,
             PlayerControl.SCALE,
             PlayerControl.DECODER,
             PlayerControl.AMBIENCE_MODE,
@@ -101,10 +102,11 @@ class PlayerControlsLayout(
         val customizableControls: Set<PlayerControl> =
             (topRightControls + bottomLeftControls).toSet()
 
-        internal const val CURRENT_VERSION = 2
+        internal const val CURRENT_VERSION = 3
 
         private val introducedControlVersions: Map<PlayerControl, Int> = mapOf(
             PlayerControl.MUTE to 2,
+            PlayerControl.MARK to 3,
         )
 
         fun defaultEntries(): List<PlayerControlLayoutEntry> = buildList {

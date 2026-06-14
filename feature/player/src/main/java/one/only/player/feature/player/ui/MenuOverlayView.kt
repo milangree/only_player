@@ -49,6 +49,7 @@ sealed interface MenuRoute {
     data object Playlist : MenuRoute
     data object VideoContentScale : MenuRoute
     data object VideoFilters : MenuRoute
+    data object PlaybackMarks : MenuRoute
 }
 
 @Composable

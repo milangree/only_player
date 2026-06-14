@@ -108,7 +108,9 @@ import one.only.player.feature.player.extensions.copy
 import one.only.player.feature.player.extensions.getManuallySelectedTrackIndex
 import one.only.player.feature.player.extensions.isApproximateSeekEnabled
 import one.only.player.feature.player.extensions.isVideoEffectsAvailable
+import one.only.player.feature.player.extensions.localParentPath
 import one.only.player.feature.player.extensions.positionMs
+import one.only.player.feature.player.extensions.remoteDirectoryPath
 import one.only.player.feature.player.extensions.remoteFilePath
 import one.only.player.feature.player.extensions.remoteProtocol
 import one.only.player.feature.player.extensions.remoteServerId
@@ -1816,6 +1818,8 @@ class PlayerService : MediaSessionService() {
                                 remoteServerId = mediaItem.mediaMetadata.remoteServerId,
                                 remoteFilePath = mediaItem.mediaMetadata.remoteFilePath,
                                 remoteProtocol = mediaItem.mediaMetadata.remoteProtocol,
+                                localParentPath = mediaItem.mediaMetadata.localParentPath,
+                                remoteDirectoryPath = mediaItem.mediaMetadata.remoteDirectoryPath,
                             )
                         }.build(),
                     )

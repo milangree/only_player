@@ -536,6 +536,10 @@ open class PlayerActivity : AppCompatActivity() {
         playlistStartedAtMs: Long,
     ) {
         val apiPlaylist = playerApi.getPlaylist()
+        val apiPlaylistRemotePaths = playerApi.getPlaylistRemotePaths()
+        val remotePathByUri = apiPlaylist
+            .zip(apiPlaylistRemotePaths)
+            .toMap()
         val folderPlaylist = if (apiPlaylist.isEmpty()) {
             viewModel.getPlaylistFromUri(Uri.parse(playbackTarget.playbackUriString))
         } else {
@@ -565,6 +569,7 @@ open class PlayerActivity : AppCompatActivity() {
                 requestHeaders = requestHeaders,
                 isCurrentItem = false,
                 localParentPath = findLocalParentPath(folderPlaylist, uriString),
+                remoteFilePath = remotePathByUri[uriString],
             )
         }
         val afterItems = playlist.drop(currentIndex + 1).map { uriString ->
@@ -573,6 +578,7 @@ open class PlayerActivity : AppCompatActivity() {
                 requestHeaders = requestHeaders,
                 isCurrentItem = false,
                 localParentPath = findLocalParentPath(folderPlaylist, uriString),
+                remoteFilePath = remotePathByUri[uriString],
             )
         }
 
@@ -600,6 +606,7 @@ open class PlayerActivity : AppCompatActivity() {
         requestHeaders: Map<String, String>,
         isCurrentItem: Boolean,
         localParentPath: String?,
+        remoteFilePath: String? = null,
     ): MediaItem = MediaItem.Builder().apply {
         val uri = Uri.parse(uriString)
         setUri(uriString)
@@ -615,8 +622,9 @@ open class PlayerActivity : AppCompatActivity() {
             val filePath = if (isCurrentItem) {
                 requestHeaders["_remote_file_path"]
             } else {
-                Uri.parse(uriString).path
+                remoteFilePath
             }
+            val itemRequestHeaders = filePath?.let { requestHeaders + ("_remote_file_path" to it) } ?: requestHeaders
             setMediaMetadata(
                 MediaMetadata.Builder().apply {
                     if (isCurrentItem) setTitle(playerApi.title)
@@ -625,7 +633,7 @@ open class PlayerActivity : AppCompatActivity() {
                         ?.ifBlank { "/" }
                     setExtras(
                         positionMs = if (isCurrentItem) playerApi.position?.toLong() else null,
-                        requestHeaders = requestHeaders,
+                        requestHeaders = itemRequestHeaders,
                         remoteServerId = remoteServerId,
                         remoteFilePath = filePath,
                         remoteProtocol = remoteProtocol,

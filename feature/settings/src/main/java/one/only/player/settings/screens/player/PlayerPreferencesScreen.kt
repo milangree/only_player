@@ -3,9 +3,11 @@ package one.only.player.settings.screens.player
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -14,26 +16,36 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import one.only.player.core.common.extensions.isPipFeatureSupported
 import one.only.player.core.common.extensions.round
 import one.only.player.core.model.ControlButtonsPosition
+import one.only.player.core.model.ControllerAutoHidePreset
 import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.ScreenOrientation
 import one.only.player.core.ui.R
+import one.only.player.core.ui.components.CancelButton
 import one.only.player.core.ui.components.ClickablePreferenceItem
 import one.only.player.core.ui.components.ListSectionTitle
+import one.only.player.core.ui.components.NextDialog
 import one.only.player.core.ui.components.NextTopAppBar
 import one.only.player.core.ui.components.PreferenceSlider
 import one.only.player.core.ui.components.PreferenceSwitch
@@ -96,27 +108,23 @@ private fun PlayerPreferencesContent(
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                PreferenceSlider(
+                ClickablePreferenceItem(
                     modifier = Modifier.testTag("item_settings_player_controller_timeout"),
-                    sliderModifier = Modifier.testTag("slider_settings_player_controller_timeout"),
                     title = stringResource(R.string.controller_timeout),
-                    description = stringResource(R.string.seconds, uiState.preferences.controllerAutoHideTimeout),
+                    description = uiState.preferences.controllerAutoHideDescription(),
                     icon = NextIcons.Timer,
-                    value = uiState.preferences.controllerAutoHideTimeout.toFloat(),
-                    valueRange = 1.0f..60.0f,
-                    onValueChange = { onEvent(PlayerPreferencesUiEvent.UpdateControlAutoHideTimeout(it.toInt())) },
-                    isFirstItem = true,
-                    trailingContent = {
-                        FilledIconButton(
-                            modifier = Modifier.testTag("btn_reset_settings_player_controller_timeout"),
-                            onClick = { onEvent(PlayerPreferencesUiEvent.UpdateControlAutoHideTimeout(PlayerPreferences.DEFAULT_CONTROLLER_AUTO_HIDE_TIMEOUT)) },
-                        ) {
-                            Icon(
-                                imageVector = NextIcons.History,
-                                contentDescription = stringResource(id = R.string.reset_controller_timeout),
-                            )
-                        }
+                    onClick = {
+                        onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.ControllerAutoHideDialog))
                     },
+                    isFirstItem = true,
+                )
+                PreferenceSwitch(
+                    modifier = Modifier.testTag("switch_settings_player_dim_video_controls"),
+                    title = stringResource(id = R.string.dim_video_when_controls_visible),
+                    description = stringResource(id = R.string.dim_video_when_controls_visible_description),
+                    icon = NextIcons.HideSource,
+                    isChecked = uiState.preferences.shouldDimVideoWhenControlsVisible,
+                    onClick = { onEvent(PlayerPreferencesUiEvent.ToggleDimVideoWhenControlsVisible) },
                 )
                 ClickablePreferenceItem(
                     modifier = Modifier.testTag("item_settings_player_screen_orientation"),
@@ -260,6 +268,40 @@ private fun PlayerPreferencesContent(
 
         uiState.showDialog?.let { showDialog ->
             when (showDialog) {
+                PlayerPreferenceDialog.ControllerAutoHideDialog -> {
+                    OptionsDialog(
+                        text = stringResource(id = R.string.controller_timeout_select),
+                        onDismissClick = { onEvent(PlayerPreferencesUiEvent.ShowDialog(null)) },
+                    ) {
+                        items(ControllerAutoHidePreset.entries.toTypedArray()) {
+                            RadioTextButton(
+                                modifier = Modifier.testTag("option_settings_player_controller_timeout_${it.name.lowercase()}"),
+                                text = it.description(uiState.preferences),
+                                isSelected = it == uiState.preferences.controllerAutoHidePreset,
+                                onClick = {
+                                    if (it == ControllerAutoHidePreset.CUSTOM) {
+                                        onEvent(PlayerPreferencesUiEvent.ShowDialog(PlayerPreferenceDialog.ControllerAutoHideCustomDialog))
+                                    } else {
+                                        onEvent(PlayerPreferencesUiEvent.UpdateControlAutoHidePreset(it))
+                                        onEvent(PlayerPreferencesUiEvent.ShowDialog(null))
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+
+                PlayerPreferenceDialog.ControllerAutoHideCustomDialog -> {
+                    ControllerAutoHideCustomDialog(
+                        initialValue = uiState.preferences.controllerAutoHideTimeout,
+                        onDismiss = { onEvent(PlayerPreferencesUiEvent.ShowDialog(null)) },
+                        onConfirm = {
+                            onEvent(PlayerPreferencesUiEvent.UpdateControlAutoHideTimeout(it))
+                            onEvent(PlayerPreferencesUiEvent.ShowDialog(null))
+                        },
+                    )
+                }
+
                 PlayerPreferenceDialog.PlayerScreenOrientationDialog -> {
                     OptionsDialog(
                         text = stringResource(id = R.string.player_screen_orientation),
@@ -338,6 +380,54 @@ private fun PlayerPreferencesContent(
             }
         }
     }
+}
+
+@Composable
+private fun ControllerAutoHideCustomDialog(
+    initialValue: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var value by rememberSaveable(initialValue) { mutableStateOf(initialValue.coerceAtLeast(1).toString()) }
+    val seconds = value.toIntOrNull()?.coerceAtLeast(1)
+
+    NextDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.custom_controller_timeout)) },
+        content = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { input -> value = input.filter(Char::isDigit) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("input_settings_player_controller_timeout_custom"),
+                singleLine = true,
+                label = { Text(stringResource(R.string.enter_seconds)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                modifier = Modifier.testTag("btn_settings_player_controller_timeout_custom_confirm"),
+                enabled = seconds != null,
+                onClick = { seconds?.let(onConfirm) },
+            ) {
+                Text(stringResource(R.string.done))
+            }
+        },
+        dismissButton = { CancelButton(onClick = onDismiss) },
+    )
+}
+
+@Composable
+private fun PlayerPreferences.controllerAutoHideDescription(): String = controllerAutoHidePreset.description(this)
+
+@Composable
+private fun ControllerAutoHidePreset.description(preferences: PlayerPreferences): String = when (this) {
+    ControllerAutoHidePreset.DISABLED -> stringResource(R.string.controller_timeout_disabled)
+    ControllerAutoHidePreset.FIFTEEN_SECONDS -> stringResource(R.string.controller_timeout_15_seconds)
+    ControllerAutoHidePreset.ONE_MINUTE -> stringResource(R.string.controller_timeout_1_minute)
+    ControllerAutoHidePreset.CUSTOM -> stringResource(R.string.controller_timeout_custom_value, preferences.controllerAutoHideTimeout)
 }
 
 @DayNightPreview

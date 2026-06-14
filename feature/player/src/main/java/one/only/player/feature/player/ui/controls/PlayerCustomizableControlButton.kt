@@ -42,6 +42,7 @@ internal fun PlayerCustomizableControlButton(
     onSubtitleClick: () -> Unit,
     onLockControlsClick: () -> Unit,
     onMuteClick: () -> Unit,
+    onPlaybackMarksClick: () -> Unit,
     onVideoContentScaleClick: () -> Unit,
     onVideoContentScaleLongClick: () -> Unit,
     onDecoderClick: () -> Unit,
@@ -166,6 +167,23 @@ internal fun PlayerCustomizableControlButton(
                 Icon(
                     painter = painterResource(if (isMuted) R.drawable.ic_mute else R.drawable.ic_volume),
                     contentDescription = if (isMuted) "btn_unmute" else "btn_mute",
+                )
+            }
+        }
+
+        PlayerControl.MARK -> {
+            PlayerButton(
+                modifier = buttonModifier,
+                onClick = onPlaybackMarksClick,
+                isSelected = isSelected,
+                label = label,
+                shouldDimWhenUnselected = isCustomizingControls,
+                shouldShowCustomizeFrame = isCustomizingControls,
+                isOutlineOnly = isPlaceholder,
+            ) {
+                Icon(
+                    imageVector = NextIcons.History,
+                    contentDescription = "btn_playback_marks",
                 )
             }
         }
@@ -388,6 +406,7 @@ private fun PlayerControl.label(isMuted: Boolean): String = when (this) {
     PlayerControl.SUBTITLE -> stringResource(R.string.subtitle)
     PlayerControl.LOCK -> stringResource(R.string.controls_lock)
     PlayerControl.MUTE -> stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute)
+    PlayerControl.MARK -> stringResource(R.string.controls_mark)
     PlayerControl.SCALE -> stringResource(R.string.video_zoom)
     PlayerControl.DECODER -> stringResource(R.string.decoder)
     PlayerControl.AMBIENCE_MODE -> stringResource(R.string.ambience_mode)

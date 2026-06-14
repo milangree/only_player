@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.Player
 import one.only.player.core.model.DecoderPriority
+import one.only.player.core.model.PlaybackMark
 import one.only.player.core.model.PlayerPreferences
 import one.only.player.core.model.VideoContentScale
 import one.only.player.core.ui.R
@@ -34,6 +35,10 @@ fun BoxScope.OverlayShowView(
     onCloseVideoFilters: () -> Unit = {},
     onShowVideoFilters: () -> Unit = {},
     onDecoderPriorityChanged: (DecoderPriority) -> Unit = {},
+    playbackMarks: List<PlaybackMark> = emptyList(),
+    onAddPlaybackMarkClick: () -> Unit = {},
+    onPlaybackMarkClick: (PlaybackMark) -> Unit = {},
+    onDeletePlaybackMarkClick: (PlaybackMark) -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -102,6 +107,36 @@ fun BoxScope.OverlayShowView(
         onDecoderPriorityClick = onDecoderPriorityChanged,
         onDismiss = onDismiss,
     )
+
+    PlaybackMarksView(
+        shouldShow = overlayView == OverlayView.PLAYBACK_MARKS,
+        marks = playbackMarks,
+        onAddMarkClick = onAddPlaybackMarkClick,
+        onMarkClick = onPlaybackMarkClick,
+        onDeleteMarkClick = onDeletePlaybackMarkClick,
+    )
+}
+
+@Composable
+private fun BoxScope.PlaybackMarksView(
+    shouldShow: Boolean,
+    marks: List<PlaybackMark>,
+    onAddMarkClick: () -> Unit,
+    onMarkClick: (PlaybackMark) -> Unit,
+    onDeleteMarkClick: (PlaybackMark) -> Unit,
+) {
+    OverlayView(
+        shouldShow = shouldShow,
+        title = stringResource(R.string.playback_marks),
+        testTag = "panel_playback_marks",
+    ) {
+        PlaybackMarksContent(
+            marks = marks,
+            onAddMarkClick = onAddMarkClick,
+            onMarkClick = onMarkClick,
+            onDeleteMarkClick = onDeleteMarkClick,
+        )
+    }
 }
 
 @Composable
@@ -139,4 +174,5 @@ enum class OverlayView {
     PLAYLIST,
     SLEEP_TIMER,
     DECODER_PRIORITY,
+    PLAYBACK_MARKS,
 }

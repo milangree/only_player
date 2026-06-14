@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
@@ -80,14 +81,17 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import one.only.player.core.common.Logger
 import one.only.player.core.data.repository.ExternalSubtitleFontSource
+import one.only.player.core.model.PlaybackMark
 import one.only.player.core.model.PlayerControl
 import one.only.player.core.model.PlayerControlZone
 import one.only.player.core.model.PlayerControlsLayout
 import one.only.player.core.model.PlayerControlsStyle
 import one.only.player.core.model.PlayerIconStyle
 import one.only.player.core.model.PlayerPreferences
+import one.only.player.core.model.controllerAutoHideTimeoutSecondsOrNull
 import one.only.player.core.ui.R as coreUiR
 import one.only.player.core.ui.components.VideoFiltersPanel
 import one.only.player.core.ui.extensions.copy
@@ -98,6 +102,7 @@ import one.only.player.feature.player.buttons.PreviousButton
 import one.only.player.feature.player.extensions.nameRes
 import one.only.player.feature.player.extensions.noRippleClickable
 import one.only.player.feature.player.extensions.seekByRequestedOffset
+import one.only.player.feature.player.extensions.seekToRequestedPosition
 import one.only.player.feature.player.input.PlayerKeyboardController
 import one.only.player.feature.player.service.previewVideoFilters
 import one.only.player.feature.player.state.ControlsVisibilityState
@@ -125,6 +130,7 @@ import one.only.player.feature.player.ui.MenuRootContent
 import one.only.player.feature.player.ui.MenuRoute
 import one.only.player.feature.player.ui.OverlayShowView
 import one.only.player.feature.player.ui.OverlayView
+import one.only.player.feature.player.ui.PlaybackMarksContent
 import one.only.player.feature.player.ui.PlaybackSpeedSelectorContent
 import one.only.player.feature.player.ui.PlaylistContent
 import one.only.player.feature.player.ui.SleepTimerSelectorContent
@@ -196,11 +202,12 @@ internal fun MediaPlayerScreen(
         isVolumeBoostEnabled = playerPreferences.isVolumeBoostEnabled,
     )
     player ?: return
+    val playbackMarks by viewModel.playbackMarks.collectAsStateWithLifecycle()
     val metadataState = rememberMetadataState(player)
     val mediaPresentationState = rememberMediaPresentationState(player)
     val controlsVisibilityState = rememberControlsVisibilityState(
         player = player,
-        hideAfter = playerPreferences.controllerAutoHideTimeout.seconds,
+        hideAfter = playerPreferences.controllerAutoHideTimeoutSecondsOrNull()?.seconds,
     )
     val tapGestureState = rememberTapGestureState(
         player = player,
@@ -246,6 +253,22 @@ internal fun MediaPlayerScreen(
     var lastSavedVolumePercentage by remember { mutableIntStateOf(volumeState.volumePercentage) }
     var pendingRestoredVolumePercentage by remember { mutableStateOf<Int?>(null) }
     val errorState = rememberErrorState(player = player)
+
+    DisposableEffect(player) {
+        viewModel.updatePlaybackMarkMediaItem(player.currentMediaItem)
+        val listener = object : Player.Listener {
+            override fun onMediaItemTransition(
+                mediaItem: androidx.media3.common.MediaItem?,
+                reason: Int,
+            ) {
+                viewModel.updatePlaybackMarkMediaItem(mediaItem)
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+        }
+    }
 
     LaunchedEffect(pictureInPictureState.isInPictureInPictureMode) {
         if (pictureInPictureState.isInPictureInPictureMode) {
@@ -361,6 +384,7 @@ internal fun MediaPlayerScreen(
         OverlayView.PLAYLIST -> MenuRoute.Playlist
         OverlayView.SLEEP_TIMER -> MenuRoute.SleepTimer
         OverlayView.DECODER_PRIORITY -> MenuRoute.Decoder
+        OverlayView.PLAYBACK_MARKS -> MenuRoute.PlaybackMarks
     }
     fun openOverlayPanel(target: OverlayView) {
         controlsVisibilityState.hideControls()
@@ -378,6 +402,14 @@ internal fun MediaPlayerScreen(
             Toast.makeText(context, videoFiltersUnavailableMessage, Toast.LENGTH_SHORT).show()
         }
     }
+    fun addPlaybackMark() {
+        viewModel.addPlaybackMark(
+            mediaItem = player.currentMediaItem,
+            positionMs = player.currentPosition,
+            durationMs = player.duration,
+        )
+        controlsVisibilityState.showControls()
+    }
     fun closeVideoFiltersOverlay() {
         restoreVideoFiltersPreview()
         overlayView = null
@@ -389,6 +421,11 @@ internal fun MediaPlayerScreen(
         }
         overlayView = null
         menuRouteStack = emptyList()
+    }
+    fun seekToPlaybackMark(mark: PlaybackMark) {
+        player.seekToRequestedPosition(mark.positionMs)
+        dismissOverlay()
+        controlsVisibilityState.showControls()
     }
     fun toggleAmbienceMode(shouldShowControls: Boolean = true) {
         isAmbienceModeEnabled = !isAmbienceModeEnabled
@@ -480,6 +517,8 @@ internal fun MediaPlayerScreen(
         longPressSpeed = tapGestureState.currentLongPressSpeed,
         shouldShowOverlay = shouldShowOverlay,
     )
+    val shouldShowControlsScrim = controlsVisibilityState.isControlsVisible &&
+        (isCustomizingControls || playerPreferences.shouldDimVideoWhenControlsVisible)
 
     LaunchedEffect(playerPreferences) {
         if (subtitleStylePreviewPreferences?.hasSameSubtitleStyle(playerPreferences) == true) {
@@ -673,6 +712,22 @@ internal fun MediaPlayerScreen(
         }
     }
 
+    @Suppress("DEPRECATION")
+    fun android.os.Bundle?.longValue(key: String): Long? {
+        if (this == null || !containsKey(key)) return null
+        return when (val rawValue = get(key)) {
+            is Long -> rawValue
+            is Int -> rawValue.toLong()
+            is Number -> rawValue.toLong()
+            is String -> rawValue.toLongOrNull()
+            else -> null
+        }
+    }
+
+    fun markIdFrom(extras: android.os.Bundle?): Long? = extras.longValue("id") ?: extras.longValue("value")
+
+    fun markPositionFrom(extras: android.os.Bundle?): Long? = extras.longValue("position_ms") ?: extras.longValue("value")
+
     fun handleDebugPlayerAction(action: String, extras: android.os.Bundle?): Boolean {
         if (isCustomizingControls && action != PlayerDebugCommandBridge.ACTION_TOGGLE_CUSTOMIZE_CONTROLS) return false
         when (action) {
@@ -715,6 +770,37 @@ internal fun MediaPlayerScreen(
             PlayerDebugCommandBridge.ACTION_SCREENSHOT -> onScreenshotClick()
             PlayerDebugCommandBridge.ACTION_BACKGROUND -> onPlayInBackgroundClick()
             PlayerDebugCommandBridge.ACTION_SHOW_SLEEP_TIMER -> openOverlayPanel(OverlayView.SLEEP_TIMER)
+            PlayerDebugCommandBridge.ACTION_SHOW_MARKS -> openOverlayPanel(OverlayView.PLAYBACK_MARKS)
+            PlayerDebugCommandBridge.ACTION_MARK_ADD -> {
+                val didAdd = runBlocking {
+                    viewModel.addPlaybackMarkNow(
+                        mediaItem = player.currentMediaItem,
+                        positionMs = player.currentPosition,
+                        durationMs = player.duration,
+                    )
+                }
+                if (!didAdd) return false
+                controlsVisibilityState.showControls()
+            }
+            PlayerDebugCommandBridge.ACTION_MARK_LIST -> {
+                extras?.putString(
+                    "value",
+                    playbackMarks.joinToString(separator = "|") { mark -> "${mark.id}@${mark.positionMs}" },
+                )
+            }
+            PlayerDebugCommandBridge.ACTION_MARK_SEEK -> {
+                val markId = markIdFrom(extras)
+                val positionMs = markPositionFrom(extras)
+                val mark = markId?.let { id -> playbackMarks.firstOrNull { it.id == id } }
+                    ?: positionMs?.let { PlaybackMark(mediaUri = "", positionMs = it, durationMs = player.duration) }
+                    ?: playbackMarks.firstOrNull()
+                    ?: return false
+                seekToPlaybackMark(mark)
+            }
+            PlayerDebugCommandBridge.ACTION_MARK_DELETE -> {
+                val markId = markIdFrom(extras) ?: playbackMarks.firstOrNull()?.id ?: return false
+                runBlocking { viewModel.deletePlaybackMarkNow(markId) }
+            }
             PlayerDebugCommandBridge.ACTION_SHOW_MENU -> {
                 if (isModern) {
                     controlsVisibilityState.hideControls()
@@ -802,7 +888,7 @@ internal fun MediaPlayerScreen(
                 )
 
                 AnimatedVisibility(
-                    visible = controlsVisibilityState.isControlsVisible,
+                    visible = shouldShowControlsScrim,
                     enter = fadeIn(),
                     exit = fadeOut(),
                 ) {
@@ -947,6 +1033,13 @@ internal fun MediaPlayerScreen(
                                                 toggleControlVisibility(PlayerControl.MUTE)
                                             } else {
                                                 volumeState.toggleMute()
+                                            }
+                                        },
+                                        onPlaybackMarksClick = {
+                                            if (isCustomizingControls) {
+                                                toggleControlVisibility(PlayerControl.MARK)
+                                            } else {
+                                                openOverlayPanel(OverlayView.PLAYBACK_MARKS)
                                             }
                                         },
                                         onVideoContentScaleClick = {
@@ -1171,6 +1264,13 @@ internal fun MediaPlayerScreen(
                                                 volumeState.toggleMute()
                                             }
                                         },
+                                        onPlaybackMarksClick = {
+                                            if (isCustomizingControls) {
+                                                toggleControlVisibility(PlayerControl.MARK)
+                                            } else {
+                                                openOverlayPanel(OverlayView.PLAYBACK_MARKS)
+                                            }
+                                        },
                                         onVideoContentScaleClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.SCALE)
@@ -1247,6 +1347,7 @@ internal fun MediaPlayerScreen(
                                 onLockControlsClick = { },
                                 isMuted = volumeState.isMuted,
                                 onMuteClick = { },
+                                onPlaybackMarksClick = { },
                                 onVideoContentScaleClick = { },
                                 onVideoContentScaleLongClick = { },
                                 onDecoderClick = { },
@@ -1357,7 +1458,11 @@ internal fun MediaPlayerScreen(
                             onNavigate = ::navigateToMenuRoute,
                             onLockClick = {
                                 controlsVisibilityState.showControls()
-                                controlsVisibilityState.lockControls()
+                                if (controlsVisibilityState.isControlsLocked) {
+                                    controlsVisibilityState.unlockControls()
+                                } else {
+                                    controlsVisibilityState.lockControls()
+                                }
                                 dismissOverlay()
                             },
                             onMuteClick = {
@@ -1449,6 +1554,13 @@ internal fun MediaPlayerScreen(
                             },
                             onDismiss = ::dismissOverlay,
                         )
+                        MenuRoute.PlaybackMarks -> PlaybackMarksContent(
+                            modifier = Modifier.testTag("panel_playback_marks"),
+                            marks = playbackMarks,
+                            onAddMarkClick = ::addPlaybackMark,
+                            onMarkClick = ::seekToPlaybackMark,
+                            onDeleteMarkClick = { mark -> viewModel.deletePlaybackMark(mark.id) },
+                        )
                     }
                 }
             } else {
@@ -1477,6 +1589,10 @@ internal fun MediaPlayerScreen(
                         viewModel.updateDecoderPriority(it)
                         dismissOverlay()
                     },
+                    playbackMarks = playbackMarks,
+                    onAddPlaybackMarkClick = ::addPlaybackMark,
+                    onPlaybackMarkClick = ::seekToPlaybackMark,
+                    onDeletePlaybackMarkClick = { mark -> viewModel.deletePlaybackMark(mark.id) },
                 )
             }
         }
@@ -1548,6 +1664,7 @@ private fun titleForMenuRoute(route: MenuRoute?): String = when (route) {
     MenuRoute.Playlist -> stringResource(coreUiR.string.now_playing)
     MenuRoute.SleepTimer -> stringResource(coreUiR.string.sleep_timer)
     MenuRoute.Decoder -> stringResource(coreUiR.string.decoder_priority)
+    MenuRoute.PlaybackMarks -> stringResource(coreUiR.string.playback_marks)
 }
 
 @Composable

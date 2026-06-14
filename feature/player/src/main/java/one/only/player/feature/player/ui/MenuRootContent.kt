@@ -16,8 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import one.only.player.core.ui.R
@@ -86,13 +88,20 @@ fun MenuRootContent(
             onClick = { onNavigate(MenuRoute.SleepTimer) },
         )
         MenuItemRow(
+            icon = NextIcons.History,
+            text = stringResource(R.string.playback_marks),
+            testTag = "menu_item_playback_marks",
+            onClick = { onNavigate(MenuRoute.PlaybackMarks) },
+        )
+        MenuItemRow(
             icon = NextIcons.Lock,
             text = stringResource(if (isLockEnabled) R.string.controls_unlock else R.string.controls_lock),
             testTag = "menu_item_lock",
             onClick = onLockClick,
         )
         MenuItemRow(
-            icon = NextIcons.VolumeUp,
+            icon = NextIcons.VolumeUp.takeIf { !isMuted },
+            iconPainter = painterResource(R.drawable.ic_mute).takeIf { isMuted },
             text = stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute),
             testTag = "menu_item_mute",
             onClick = onMuteClick,
@@ -150,7 +159,8 @@ fun MenuRootContent(
 
 @Composable
 private fun MenuItemRow(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconPainter: Painter? = null,
     text: String,
     testTag: String,
     onClick: () -> Unit,
@@ -182,11 +192,19 @@ private fun MenuItemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-            )
+            when {
+                icon != null -> Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                )
+
+                iconPainter != null -> Icon(
+                    painter = iconPainter,
+                    contentDescription = null,
+                    tint = contentColor,
+                )
+            }
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
