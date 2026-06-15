@@ -40,10 +40,6 @@ nextlib/ffmpeg/sources
 vendor/
 .bundle/
 .kotlin
-# Local contributor notes
-AGENTS.md
-**/AGENTS.md
-
 # Codex local files
 .codex/
 .codex/**
@@ -58,8 +54,7 @@ codex.*
 # Claude local files
 .claude/
 .claude/**
-CLAUDE.md
-**/CLAUDE.md
+*/**/CLAUDE.md
 
 # Local audit artifacts
 audit/
