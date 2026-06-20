@@ -32,7 +32,6 @@ internal fun PlayerCustomizableControlButton(
     isBeingDragged: Boolean = false,
     isOutlineOnly: Boolean = false,
     shouldHideLabel: Boolean = false,
-    isMuted: Boolean,
     onPlaylistClick: () -> Unit,
     onPlaybackSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
@@ -44,7 +43,6 @@ internal fun PlayerCustomizableControlButton(
     onVideoContentScaleLongClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onAmbienceModeClick: () -> Unit,
-    isAmbienceModeEnabled: Boolean,
     onVideoFiltersClick: () -> Unit,
     onPictureInPictureClick: () -> Unit,
     onRotateClick: () -> Unit,
@@ -62,7 +60,7 @@ internal fun PlayerCustomizableControlButton(
     val isSelected = isCustomizingControls && control in visiblePlayerControls
     val isPlaceholder = isBeingDragged || isOutlineOnly
     val shouldShowLabel = isCustomizingControls || !shouldHideLabel
-    val label = control.label(isMuted).takeIf { shouldShowLabel }
+    val label = control.label().takeIf { shouldShowLabel }
     val buttonModifier = modifier
 
     when (control) {
@@ -162,8 +160,8 @@ internal fun PlayerCustomizableControlButton(
                 isOutlineOnly = isPlaceholder,
             ) {
                 Icon(
-                    painter = painterResource(if (isMuted) R.drawable.ic_mute else R.drawable.ic_volume),
-                    contentDescription = if (isMuted) "btn_unmute" else "btn_mute",
+                    painter = painterResource(R.drawable.ic_volume),
+                    contentDescription = "btn_mute",
                 )
             }
         }
@@ -231,7 +229,7 @@ internal fun PlayerCustomizableControlButton(
                 isOutlineOnly = isPlaceholder,
             ) {
                 Icon(
-                    imageVector = if (isAmbienceModeEnabled) NextIcons.Frame else NextIcons.Background,
+                    imageVector = NextIcons.Background,
                     contentDescription = "btn_ambience_mode",
                 )
             }
@@ -408,7 +406,7 @@ internal fun PlayerCustomizableControlButton(
 }
 
 @Composable
-private fun PlayerControl.label(isMuted: Boolean): String = when (this) {
+private fun PlayerControl.label(): String = when (this) {
     PlayerControl.PLAYLIST -> stringResource(R.string.now_playing)
 
     PlayerControl.PLAYBACK_SPEED -> stringResource(R.string.speed)
@@ -417,9 +415,9 @@ private fun PlayerControl.label(isMuted: Boolean): String = when (this) {
 
     PlayerControl.SUBTITLE -> stringResource(R.string.subtitle)
 
-    PlayerControl.LOCK -> stringResource(R.string.controls_lock)
+    PlayerControl.LOCK -> stringResource(R.string.controls_lock_switch)
 
-    PlayerControl.MUTE -> stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute)
+    PlayerControl.MUTE -> stringResource(R.string.mute_switch)
 
     PlayerControl.MARK -> stringResource(R.string.controls_mark)
 

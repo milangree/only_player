@@ -138,6 +138,7 @@ import one.only.player.feature.player.ui.ShuffleModeSelectorContent
 import one.only.player.feature.player.ui.SleepTimerSelectorContent
 import one.only.player.feature.player.ui.SubtitleConfiguration
 import one.only.player.feature.player.ui.SubtitleSelectorContent
+import one.only.player.feature.player.ui.ToggleOptionSelectorContent
 import one.only.player.feature.player.ui.VerticalProgressView
 import one.only.player.feature.player.ui.VideoContentScaleSelectorContent
 import one.only.player.feature.player.ui.controls.ControlsBottomModernView
@@ -389,6 +390,10 @@ internal fun MediaPlayerScreen(
         OverlayView.PLAYBACK_MARKS -> MenuRoute.PlaybackMarks
         OverlayView.LOOP_MODE -> MenuRoute.LoopMode
         OverlayView.SHUFFLE_MODE -> MenuRoute.ShuffleMode
+        OverlayView.CONTROL_LOCK -> MenuRoute.ControlLock
+        OverlayView.MUTE -> MenuRoute.Mute
+        OverlayView.AMBIENCE_MODE -> MenuRoute.AmbienceMode
+        OverlayView.MIRROR_VIDEO -> MenuRoute.MirrorVideo
     }
     fun openOverlayPanel(target: OverlayView) {
         controlsVisibilityState.hideControls()
@@ -431,12 +436,43 @@ internal fun MediaPlayerScreen(
         dismissOverlay()
         controlsVisibilityState.showControls()
     }
-    fun toggleAmbienceMode(shouldShowControls: Boolean = true) {
-        isAmbienceModeEnabled = !isAmbienceModeEnabled
+
+    fun setControlsLocked(isLocked: Boolean) {
+        controlsVisibilityState.showControls()
+        if (isLocked) {
+            controlsVisibilityState.lockControls()
+        } else {
+            controlsVisibilityState.unlockControls()
+        }
+    }
+
+    fun setMuted(isMuted: Boolean) {
+        if (volumeState.isMuted == isMuted) return
+
+        volumeState.toggleMute()
+    }
+
+    fun setAmbienceModeEnabled(
+        isEnabled: Boolean,
+        shouldShowControls: Boolean = true,
+    ) {
+        isAmbienceModeEnabled = isEnabled
         if (shouldShowControls) {
             controlsVisibilityState.showControls()
         }
     }
+
+    fun toggleAmbienceMode(shouldShowControls: Boolean = true) {
+        setAmbienceModeEnabled(
+            isEnabled = !isAmbienceModeEnabled,
+            shouldShowControls = shouldShowControls,
+        )
+    }
+
+    fun setVideoMirrored(isMirrored: Boolean) {
+        isVideoMirrored = isMirrored
+    }
+
     fun popMenuRoute() {
         if (menuRouteStack.lastOrNull() == MenuRoute.VideoFilters) {
             restoreVideoFiltersPreview()
@@ -1058,16 +1094,14 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.LOCK)
                                             } else {
-                                                controlsVisibilityState.showControls()
-                                                controlsVisibilityState.lockControls()
+                                                openOverlayPanel(OverlayView.CONTROL_LOCK)
                                             }
                                         },
-                                        isMuted = volumeState.isMuted,
                                         onMuteClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.MUTE)
                                             } else {
-                                                volumeState.toggleMute()
+                                                openOverlayPanel(OverlayView.MUTE)
                                             }
                                         },
                                         onPlaybackMarksClick = {
@@ -1100,10 +1134,9 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.AMBIENCE_MODE)
                                             } else {
-                                                toggleAmbienceMode()
+                                                openOverlayPanel(OverlayView.AMBIENCE_MODE)
                                             }
                                         },
-                                        isAmbienceModeEnabled = isAmbienceModeEnabled,
                                         onVideoFiltersClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.VIDEO_FILTERS)
@@ -1306,16 +1339,14 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.LOCK)
                                             } else {
-                                                controlsVisibilityState.showControls()
-                                                controlsVisibilityState.lockControls()
+                                                openOverlayPanel(OverlayView.CONTROL_LOCK)
                                             }
                                         },
-                                        isMuted = volumeState.isMuted,
                                         onMuteClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.MUTE)
                                             } else {
-                                                volumeState.toggleMute()
+                                                openOverlayPanel(OverlayView.MUTE)
                                             }
                                         },
                                         onPlaybackMarksClick = {
@@ -1348,10 +1379,9 @@ internal fun MediaPlayerScreen(
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.AMBIENCE_MODE)
                                             } else {
-                                                toggleAmbienceMode()
+                                                openOverlayPanel(OverlayView.AMBIENCE_MODE)
                                             }
                                         },
-                                        isAmbienceModeEnabled = isAmbienceModeEnabled,
                                         onVideoFiltersClick = {
                                             if (isCustomizingControls) {
                                                 toggleControlVisibility(PlayerControl.VIDEO_FILTERS)
@@ -1398,14 +1428,12 @@ internal fun MediaPlayerScreen(
                                 onAudioClick = { },
                                 onSubtitleClick = { },
                                 onLockControlsClick = { },
-                                isMuted = volumeState.isMuted,
                                 onMuteClick = { },
                                 onPlaybackMarksClick = { },
                                 onVideoContentScaleClick = { },
                                 onVideoContentScaleLongClick = { },
                                 onDecoderClick = { },
                                 onAmbienceModeClick = { },
-                                isAmbienceModeEnabled = isAmbienceModeEnabled,
                                 onVideoFiltersClick = { },
                                 onPictureInPictureClick = { },
                                 onRotateClick = { },
@@ -1502,36 +1530,9 @@ internal fun MediaPlayerScreen(
                 ) { route ->
                     when (route) {
                         MenuRoute.Root -> MenuRootContent(
-                            isLockEnabled = controlsVisibilityState.isControlsLocked,
-                            isMuted = volumeState.isMuted,
-                            isAmbienceModeEnabled = isAmbienceModeEnabled,
-                            isVideoMirrored = isVideoMirrored,
-                            repeatMode = player.repeatMode,
-                            isShuffleModeEnabled = player.shuffleModeEnabled,
                             isPipSupported = pictureInPictureState.isPipSupported,
                             isTakingScreenshot = isTakingScreenshot,
                             onNavigate = ::navigateToMenuRoute,
-                            onLockClick = {
-                                controlsVisibilityState.showControls()
-                                if (controlsVisibilityState.isControlsLocked) {
-                                    controlsVisibilityState.unlockControls()
-                                } else {
-                                    controlsVisibilityState.lockControls()
-                                }
-                                dismissOverlay()
-                            },
-                            onMuteClick = {
-                                volumeState.toggleMute()
-                                dismissOverlay()
-                            },
-                            onAmbienceClick = {
-                                toggleAmbienceMode(shouldShowControls = false)
-                                dismissOverlay()
-                            },
-                            onMirrorVideoClick = {
-                                isVideoMirrored = !isVideoMirrored
-                                dismissOverlay()
-                            },
                             onPictureInPictureClick = {
                                 if (!pictureInPictureState.hasPipPermission) {
                                     Toast.makeText(context, coreUiR.string.enable_pip_from_settings, Toast.LENGTH_SHORT).show()
@@ -1549,6 +1550,47 @@ internal fun MediaPlayerScreen(
                                 onPlayInBackgroundClick()
                                 dismissOverlay()
                             },
+                        )
+
+                        MenuRoute.ControlLock -> ToggleOptionSelectorContent(
+                            panelTestTag = "panel_control_lock",
+                            isEnabled = controlsVisibilityState.isControlsLocked,
+                            offTestTag = "btn_control_lock_off",
+                            onTestTag = "btn_control_lock_on",
+                            onEnabledChanged = ::setControlsLocked,
+                            onDismiss = ::dismissOverlay,
+                        )
+
+                        MenuRoute.Mute -> ToggleOptionSelectorContent(
+                            panelTestTag = "panel_mute_switch",
+                            isEnabled = volumeState.isMuted,
+                            offTestTag = "btn_mute_off",
+                            onTestTag = "btn_mute_on",
+                            onEnabledChanged = ::setMuted,
+                            onDismiss = ::dismissOverlay,
+                        )
+
+                        MenuRoute.AmbienceMode -> ToggleOptionSelectorContent(
+                            panelTestTag = "panel_ambience_mode",
+                            isEnabled = isAmbienceModeEnabled,
+                            offTestTag = "btn_ambience_mode_off",
+                            onTestTag = "btn_ambience_mode_on",
+                            onEnabledChanged = { isEnabled ->
+                                setAmbienceModeEnabled(
+                                    isEnabled = isEnabled,
+                                    shouldShowControls = false,
+                                )
+                            },
+                            onDismiss = ::dismissOverlay,
+                        )
+
+                        MenuRoute.MirrorVideo -> ToggleOptionSelectorContent(
+                            panelTestTag = "panel_mirror_video",
+                            isEnabled = isVideoMirrored,
+                            offTestTag = "btn_mirror_video_off",
+                            onTestTag = "btn_mirror_video_on",
+                            onEnabledChanged = ::setVideoMirrored,
+                            onDismiss = ::dismissOverlay,
                         )
 
                         MenuRoute.Audio -> AudioTrackSelectorContent(
@@ -1634,6 +1676,10 @@ internal fun MediaPlayerScreen(
                     isCustomVideoZoomActive = !videoZoomAndContentScaleState.zoom.isDefaultVideoZoom(),
                     playerPreferences = activePlayerPreferences,
                     sleepTimerState = sleepTimerState,
+                    isControlLockEnabled = controlsVisibilityState.isControlsLocked,
+                    isMuted = volumeState.isMuted,
+                    isAmbienceModeEnabled = isAmbienceModeEnabled,
+                    isVideoMirrored = isVideoMirrored,
                     onDismiss = ::dismissOverlay,
                     onSelectSubtitleClick = onSelectSubtitleClick,
                     onAddOnlineSubtitleClick = onAddOnlineSubtitleClick,
@@ -1657,6 +1703,10 @@ internal fun MediaPlayerScreen(
                     onAddPlaybackMarkClick = ::addPlaybackMark,
                     onPlaybackMarkClick = ::seekToPlaybackMark,
                     onDeletePlaybackMarkClick = { mark -> viewModel.deletePlaybackMark(mark.id) },
+                    onControlLockChanged = ::setControlsLocked,
+                    onMuteChanged = ::setMuted,
+                    onAmbienceModeChanged = { isEnabled -> setAmbienceModeEnabled(isEnabled) },
+                    onVideoMirroredChanged = ::setVideoMirrored,
                 )
             }
         }
@@ -1722,6 +1772,10 @@ private fun Float.isDefaultVideoZoom(): Boolean = kotlin.math.abs(this - 1f) < 0
 @Composable
 private fun titleForMenuRoute(route: MenuRoute?): String = when (route) {
     null, MenuRoute.Root -> stringResource(coreUiR.string.menu)
+    MenuRoute.ControlLock -> stringResource(coreUiR.string.controls_lock_switch)
+    MenuRoute.Mute -> stringResource(coreUiR.string.mute_switch)
+    MenuRoute.AmbienceMode -> stringResource(coreUiR.string.ambience_mode)
+    MenuRoute.MirrorVideo -> stringResource(coreUiR.string.mirror_video)
     MenuRoute.Audio -> stringResource(coreUiR.string.select_audio_track)
     MenuRoute.Subtitle -> stringResource(coreUiR.string.select_subtitle_track)
     MenuRoute.PlaybackSpeed -> stringResource(coreUiR.string.select_playback_speed)

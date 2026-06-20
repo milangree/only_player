@@ -16,31 +16,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.Player
 import one.only.player.core.ui.R
 import one.only.player.core.ui.designsystem.NextIcons
 
 @Composable
 fun MenuRootContent(
-    isLockEnabled: Boolean,
-    isMuted: Boolean,
-    isAmbienceModeEnabled: Boolean,
-    isVideoMirrored: Boolean,
-    repeatMode: Int,
-    isShuffleModeEnabled: Boolean,
     isPipSupported: Boolean,
     isTakingScreenshot: Boolean,
     onNavigate: (MenuRoute) -> Unit,
-    onLockClick: () -> Unit,
-    onMuteClick: () -> Unit,
-    onAmbienceClick: () -> Unit,
-    onMirrorVideoClick: () -> Unit,
     onPictureInPictureClick: () -> Unit,
     onScreenshotClick: () -> Unit,
     onPlayInBackgroundClick: () -> Unit,
@@ -96,31 +83,27 @@ fun MenuRootContent(
         )
         MenuItemRow(
             icon = NextIcons.Lock,
-            text = stringResource(if (isLockEnabled) R.string.controls_unlock else R.string.controls_lock),
+            text = stringResource(R.string.controls_lock_switch),
             testTag = "menu_item_lock",
-            onClick = onLockClick,
+            onClick = { onNavigate(MenuRoute.ControlLock) },
         )
         MenuItemRow(
-            icon = NextIcons.VolumeUp.takeIf { !isMuted },
-            iconPainter = painterResource(R.drawable.ic_mute).takeIf { isMuted },
-            text = stringResource(if (isMuted) R.string.controls_unmute else R.string.controls_mute),
+            icon = NextIcons.VolumeUp,
+            text = stringResource(R.string.mute_switch),
             testTag = "menu_item_mute",
-            onClick = onMuteClick,
-            isSelected = isMuted,
+            onClick = { onNavigate(MenuRoute.Mute) },
         )
         MenuItemRow(
             icon = NextIcons.Style,
             text = stringResource(R.string.ambience_mode),
             testTag = "menu_item_ambience",
-            onClick = onAmbienceClick,
-            isSelected = isAmbienceModeEnabled,
+            onClick = { onNavigate(MenuRoute.AmbienceMode) },
         )
         MenuItemRow(
             icon = NextIcons.Size,
             text = stringResource(R.string.mirror_video),
             testTag = "menu_item_mirror_video",
-            onClick = onMirrorVideoClick,
-            isSelected = isVideoMirrored,
+            onClick = { onNavigate(MenuRoute.MirrorVideo) },
         )
         if (isPipSupported) {
             MenuItemRow(
@@ -148,37 +131,24 @@ fun MenuRootContent(
             text = stringResource(R.string.loop_mode),
             testTag = "menu_item_loop",
             onClick = { onNavigate(MenuRoute.LoopMode) },
-            isSelected = repeatMode != Player.REPEAT_MODE_OFF,
         )
         MenuItemRow(
             icon = NextIcons.Shuffle,
             text = stringResource(R.string.shuffle),
             testTag = "menu_item_shuffle",
             onClick = { onNavigate(MenuRoute.ShuffleMode) },
-            isSelected = isShuffleModeEnabled,
         )
     }
 }
 
 @Composable
 private fun MenuItemRow(
-    icon: ImageVector? = null,
-    iconPainter: Painter? = null,
+    icon: ImageVector,
     text: String,
     testTag: String,
     onClick: () -> Unit,
-    isSelected: Boolean = false,
     isEnabled: Boolean = true,
 ) {
-    val containerColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surface
-    }
-    val contentColor = when {
-        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -186,7 +156,7 @@ private fun MenuItemRow(
             .testTag(testTag),
         onClick = onClick,
         enabled = isEnabled,
-        color = containerColor,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
             modifier = Modifier
@@ -195,32 +165,17 @@ private fun MenuItemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            when {
-                icon != null -> Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = contentColor,
-                )
-
-                iconPainter != null -> Icon(
-                    painter = iconPainter,
-                    contentDescription = null,
-                    tint = contentColor,
-                )
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
-                color = contentColor,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            if (isSelected) {
-                Icon(
-                    imageVector = NextIcons.Check,
-                    contentDescription = null,
-                    tint = contentColor,
-                )
-            }
         }
     }
 }

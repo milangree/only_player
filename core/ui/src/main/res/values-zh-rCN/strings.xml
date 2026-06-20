@@ -73,8 +73,10 @@
     <string name="dynamic_theme_description">将系统壁纸的颜色应用到应用主题中</string>
     <string name="controls_lock">锁定控件</string>
     <string name="controls_unlock">解锁控件</string>
+    <string name="controls_lock_switch">控件锁定</string>
     <string name="controls_mute">静音</string>
     <string name="controls_unmute">取消静音</string>
+    <string name="mute_switch">静音开关</string>
     <string name="controls_mark">标记</string>
     <string name="select_playback_speed">选择播放速度</string>
     <string name="size">大小</string>
