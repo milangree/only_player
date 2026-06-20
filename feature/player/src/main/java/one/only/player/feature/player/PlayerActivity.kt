@@ -108,6 +108,19 @@ internal data class PlaybackTarget(
     val currentPath: String?,
 )
 
+internal fun PlaybackPlaylist.limitSizeAroundCurrent(maxSize: Int): PlaybackPlaylist {
+    require(maxSize > 0)
+    if (items.size <= maxSize) return this
+
+    val safeCurrentIndex = currentIndex.coerceIn(0, items.lastIndex)
+    val startIndex = (safeCurrentIndex - maxSize / 2).coerceIn(0, items.size - maxSize)
+    val windowItems = items.subList(startIndex, startIndex + maxSize).toList()
+    return PlaybackPlaylist(
+        items = windowItems,
+        currentIndex = safeCurrentIndex - startIndex,
+    )
+}
+
 internal fun buildPlaybackPlaylistFromItems(
     playlistItems: List<String>,
     playbackTarget: PlaybackTarget,
@@ -171,6 +184,7 @@ open class PlayerActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "PlayerActivity"
+        private const val MAX_MEDIA3_PLAYLIST_ITEMS = 500
         const val EXTRA_LAUNCH_ORIENTATION = "one.only.player.extra.LAUNCH_ORIENTATION"
 
         private val SUBTITLE_DOCUMENT_MIME_TYPES = arrayOf(
@@ -558,13 +572,17 @@ open class PlayerActivity : AppCompatActivity() {
             )
         }
         val playlist = playbackPlaylist.items
-        Logger.info(TAG, "playVideo playlist=${System.currentTimeMillis() - playlistStartedAtMs}ms size=${playlist.size}")
-        if (playlist.size <= 1) return
+        val media3Playlist = playbackPlaylist.limitSizeAroundCurrent(MAX_MEDIA3_PLAYLIST_ITEMS)
+        Logger.info(
+            TAG,
+            "playVideo playlist=${System.currentTimeMillis() - playlistStartedAtMs}ms size=${playlist.size} media3Size=${media3Playlist.items.size}",
+        )
+        if (media3Playlist.items.size <= 1) return
 
-        val currentIndex = playbackPlaylist.currentIndex
+        val currentIndex = media3Playlist.currentIndex
         val currentLocalParentPath = findLocalParentPath(folderPlaylist, playbackTarget.playbackUriString)
             ?: findLocalParentPath(folderPlaylist, playbackTarget.sourceUriString)
-        val beforeItems = playlist.take(currentIndex).map { uriString ->
+        val beforeItems = media3Playlist.items.take(currentIndex).map { uriString ->
             buildMediaItem(
                 uriString = uriString,
                 requestHeaders = requestHeaders,
@@ -573,7 +591,7 @@ open class PlayerActivity : AppCompatActivity() {
                 remoteFilePath = remotePathByUri[uriString],
             )
         }
-        val afterItems = playlist.drop(currentIndex + 1).map { uriString ->
+        val afterItems = media3Playlist.items.drop(currentIndex + 1).map { uriString ->
             buildMediaItem(
                 uriString = uriString,
                 requestHeaders = requestHeaders,
