@@ -22,8 +22,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         applicationId = "one.only.player"
-        versionCode = 137
-        versionName = "1.0.136"
+        versionCode = 138
+        versionName = "1.0.137"
     }
 
     buildFeatures {
