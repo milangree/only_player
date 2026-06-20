@@ -1,12 +1,12 @@
-- 调整云端页面和收藏夹的文字大小、间距与反馈，让它们更贴近本地媒体库
-- 统一本地和云端的长按菜单样式，操作入口看起来更一致
-- 恢复云端多选文件夹和视频后加入收藏，批量整理远程内容更顺手
+- 修复搜索结果选中后没有操作入口的问题，现在可以像媒体库列表一样处理结果
+- 修复锐化滤镜默认 0% 时开启后看起来不生效的问题
+- 修复超大视频列表进入播放时可能崩溃的问题，播放器不再一次性加载过长队列
 
 <details>
 <summary>English Version</summary>
 
-- Adjust text size, spacing, and feedback on cloud pages and favorites so they feel closer to the local media library
-- Unify long-press menu styling across local and cloud browsing so actions look more consistent
-- Restore adding selected cloud folders and videos to favorites, making remote content easier to organize in batches
+- Fix missing action controls after selecting search results, so results can be managed like media library items
+- Fix sharpening looking inactive at the default 0% value
+- Fix possible crashes when opening playback from very large video lists by avoiding oversized playback queues
 
 </details>
