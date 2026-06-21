@@ -62,7 +62,6 @@ fun PlayerContentFrame(
     isGesturesEnabled: Boolean = true,
     shouldUseTextureView: Boolean = false,
     isVideoMirrored: Boolean = false,
-    isAmbienceModeEnabled: Boolean = false,
 ) {
     // decoder 切换重建 SurfaceView，重新绑定视频输出
     var surfaceRefreshKey by remember { mutableIntStateOf(0) }
@@ -88,7 +87,7 @@ fun PlayerContentFrame(
     var lastLoggedSurfaceLayout by remember { mutableStateOf("") }
     val surfaceType = if (shouldUseTextureView) SURFACE_TYPE_TEXTURE_VIEW else SURFACE_TYPE_SURFACE_VIEW
 
-    // Media3 1.10.1 的 videoSizeDp 名带 Dp 但实际存视频 px；氛围画布由 UI 容器比例显式扩展
+    // Media3 1.10.1 的 videoSizeDp 名带 Dp 但实际存视频 px
     val metadataVideoSizePx = run {
         val w = videoZoomAndContentScaleState.metadataVideoWidth.toFloat()
         val h = videoZoomAndContentScaleState.metadataVideoHeight.toFloat()
@@ -96,11 +95,7 @@ fun PlayerContentFrame(
         val rotation = videoZoomAndContentScaleState.metadataVideoRotation
         if (rotation == 90 || rotation == 270) Size(h, w) else Size(w, h)
     }
-    val presentationVideoSizePx = presentationState.videoSizeDp
-    val sourceVideoSizePx = when {
-        isAmbienceModeEnabled -> metadataVideoSizePx ?: presentationVideoSizePx
-        else -> presentationVideoSizePx ?: metadataVideoSizePx
-    }
+    val sourceVideoSizePx = presentationState.videoSizeDp ?: metadataVideoSizePx
 
     key(surfaceRefreshKey, surfaceType) {
         BoxWithConstraints(
@@ -109,12 +104,8 @@ fun PlayerContentFrame(
         ) {
             val containerWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
             val containerHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-            val containerAspectRatio = containerWidth / containerHeight
-            val videoSizePx = when {
-                isAmbienceModeEnabled && sourceVideoSizePx != null -> sourceVideoSizePx.ambientFrameSize(containerAspectRatio)
-                else -> sourceVideoSizePx
-            }
-            val contentVideoSizePx = sourceVideoSizePx ?: videoSizePx
+            val videoSizePx = sourceVideoSizePx
+            val contentVideoSizePx = videoSizePx
             val videoWidth = videoSizePx?.width ?: containerWidth
             val videoHeight = (videoSizePx?.height ?: containerHeight).coerceAtLeast(1f)
             val contentVideoWidth = contentVideoSizePx?.width ?: videoWidth
@@ -154,12 +145,12 @@ fun PlayerContentFrame(
                             bounds.right.toInt(),
                             bounds.bottom.toInt(),
                         )
-                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:${contentVideoSizePx?.width}x${contentVideoSizePx?.height}:$surfaceType:$surfaceRefreshKey:$isVideoMirrored:$isAmbienceModeEnabled"
+                        val key = "${rect.width()}x${rect.height()}@${rect.left},${rect.top}:${videoZoomAndContentScaleState.videoContentScale}:${videoSizePx?.width}x${videoSizePx?.height}:${contentVideoSizePx?.width}x${contentVideoSizePx?.height}:$surfaceType:$surfaceRefreshKey:$isVideoMirrored"
                         if (key != lastLoggedSurfaceLayout) {
                             lastLoggedSurfaceLayout = key
                             Logger.info(
                                 TAG,
-                                "Player surface layout size=${rect.width()}x${rect.height()} left=${rect.left} top=${rect.top} contentScale=${videoZoomAndContentScaleState.videoContentScale} videoPx=${videoSizePx?.width}x${videoSizePx?.height} contentPx=${contentVideoSizePx?.width}x${contentVideoSizePx?.height} coverSurface=${presentationState.coverSurface} ambient=$isAmbienceModeEnabled refresh=$surfaceRefreshKey",
+                                "Player surface layout size=${rect.width()}x${rect.height()} left=${rect.left} top=${rect.top} contentScale=${videoZoomAndContentScaleState.videoContentScale} videoPx=${videoSizePx?.width}x${videoSizePx?.height} contentPx=${contentVideoSizePx?.width}x${contentVideoSizePx?.height} coverSurface=${presentationState.coverSurface} refresh=$surfaceRefreshKey",
                             )
                         }
                         pictureInPictureState.updateVideoViewRect(rect)
@@ -168,7 +159,7 @@ fun PlayerContentFrame(
 
             if (!presentationState.coverSurface) {
                 val subtitleModifier = if (isAssSubtitleSelected) {
-                    val subtitleScale = if (isAmbienceModeEnabled) min(baseScaleX, baseScaleY) else min(fillX, fillY)
+                    val subtitleScale = min(fillX, fillY)
                     Modifier
                         .requiredSize(contentSurfaceWidthDp, contentSurfaceHeightDp)
                         .graphicsLayer {
@@ -206,20 +197,3 @@ fun PlayerContentFrame(
 }
 
 private const val TAG = "PlayerContentFrame"
-
-private fun Size.ambientFrameSize(targetAspectRatio: Float): Size {
-    if (!targetAspectRatio.isFinite() || targetAspectRatio <= 0f) return this
-
-    val sourceAspectRatio = width / height.coerceAtLeast(1f)
-    return if (targetAspectRatio >= sourceAspectRatio) {
-        Size(
-            width = height * targetAspectRatio,
-            height = height,
-        )
-    } else {
-        Size(
-            width = width,
-            height = width / targetAspectRatio,
-        )
-    }
-}

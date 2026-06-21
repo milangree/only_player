@@ -336,7 +336,10 @@ internal class VideoEffectsCoordinator(
     private fun shouldUseAmbientEffect(
         isEnabled: Boolean,
         decoderPriority: DecoderPriority,
-    ): Boolean = isEnabled && shouldApplyVideoEffects(decoderPriority) && !isCurrentVideoHdr
+    ): Boolean {
+        // 氛围背景由 UI 独立绘制，不能改写主视频输出
+        return false
+    }
 
     private fun normalizedAmbientTargetAspectRatio(targetAspectRatio: Float): Float = targetAspectRatio
         .takeIf { it.isFinite() && it > 0f }
