@@ -75,6 +75,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import java.util.Locale
@@ -105,6 +106,7 @@ import one.only.player.feature.player.extensions.seekByRequestedOffset
 import one.only.player.feature.player.extensions.seekToRequestedPosition
 import one.only.player.feature.player.input.PlayerKeyboardController
 import one.only.player.feature.player.service.previewVideoFilters
+import one.only.player.feature.player.service.setPlayerAmbienceModeEnabled
 import one.only.player.feature.player.state.ControlsVisibilityState
 import one.only.player.feature.player.state.VerticalGesture
 import one.only.player.feature.player.state.rememberBrightnessState
@@ -334,6 +336,14 @@ internal fun MediaPlayerScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val ambienceTargetAspectRatio = remember(
+        configuration.screenWidthDp,
+        configuration.screenHeightDp,
+    ) {
+        val width = configuration.screenWidthDp.takeIf { it > 0 } ?: return@remember 16f / 9f
+        val height = configuration.screenHeightDp.takeIf { it > 0 } ?: return@remember 16f / 9f
+        width.toFloat() / height.toFloat()
+    }
     val shouldShowPlayerTitle = configuration.orientation != Configuration.ORIENTATION_PORTRAIT
     val sleepTimerState = rememberSleepTimerState(player = player)
     val permanentlyVisibleControls = remember {
@@ -564,6 +574,17 @@ internal fun MediaPlayerScreen(
         if (subtitleStylePreviewPreferences?.hasSameSubtitleStyle(playerPreferences) == true) {
             subtitleStylePreviewPreferences = null
         }
+    }
+
+    LaunchedEffect(
+        player,
+        isAmbienceModeEnabled,
+        ambienceTargetAspectRatio,
+    ) {
+        (player as? MediaController)?.setPlayerAmbienceModeEnabled(
+            isEnabled = isAmbienceModeEnabled,
+            targetAspectRatio = ambienceTargetAspectRatio,
+        )
     }
 
     LaunchedEffect(
@@ -923,7 +944,11 @@ internal fun MediaPlayerScreen(
                         ?.let { with(LocalDensity.current) { it.toDp() } }
                         ?: 0.dp,
                 ) + 16.dp
-                if (isAmbienceModeEnabled) {
+                val shouldUseRealtimeAmbience = isAmbienceModeEnabled &&
+                    metadataState.isVideoEffectsAvailable &&
+                    mediaPresentationState.hasRenderedFirstFrame
+                val shouldShowStaticAmbienceBackground = isAmbienceModeEnabled && !shouldUseRealtimeAmbience
+                if (shouldShowStaticAmbienceBackground) {
                     AmbienceBackground(
                         artworkData = metadataState.artworkData,
                         artworkUri = metadataState.artworkUri,
@@ -956,6 +981,7 @@ internal fun MediaPlayerScreen(
                     decoderPriority = playerPreferences.decoderPriority,
                     shouldUseTextureView = isVideoMirrored,
                     isVideoMirrored = isVideoMirrored,
+                    isAmbienceModeEnabled = shouldUseRealtimeAmbience,
                 )
 
                 AnimatedVisibility(

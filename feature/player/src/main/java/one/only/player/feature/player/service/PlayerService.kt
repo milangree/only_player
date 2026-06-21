@@ -161,6 +161,7 @@ class PlayerService : MediaSessionService() {
         private const val LOCAL_MAX_BUFFER_MS = 30_000
         private const val LOCAL_BUFFER_FOR_PLAYBACK_MS = 150
         private const val LOCAL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 150
+        private const val DEFAULT_AMBIENCE_TARGET_ASPECT_RATIO = 16f / 9f
         private val FAST_SEEK_PARAMETERS = SeekParameters.CLOSEST_SYNC
         private val EXACT_SEEK_PARAMETERS = SeekParameters.DEFAULT
         private val REMOTE_SOURCE_URI_SCHEMES = setOf("smb", "ftp")
@@ -222,6 +223,8 @@ class PlayerService : MediaSessionService() {
         currentPreferencesProvider = ::playerPreferences,
         currentPlayerProvider = { mediaSession?.player as? ExoPlayer },
     )
+    private var isAmbienceModeEnabled = false
+    private var ambienceTargetAspectRatio = DEFAULT_AMBIENCE_TARGET_ASPECT_RATIO
     private val subtitleTrackSelector = SubtitleTrackSelector { playerPreferences.preferredSubtitleLanguage }
     private val externalSubtitleLoader by lazy {
         ExternalSubtitleLoader(
@@ -681,7 +684,7 @@ class PlayerService : MediaSessionService() {
                 videoHeight = height,
                 videoRotation = rotation,
                 hasRenderedFirstFrame = true,
-                isVideoEffectsAvailable = shouldApplyVideoEffects(activeDecoderPriority),
+                isVideoEffectsAvailable = videoEffectsCoordinator.isAvailable(),
             )
             player.replaceMediaItem(
                 player.currentMediaItemIndex,
@@ -800,6 +803,7 @@ class PlayerService : MediaSessionService() {
         failedPlayer.stop()
         failedPlayer.release()
         videoEffectsCoordinator.updateAvailability(retryPlayer)
+        applyAmbienceModeToPlayer(retryPlayer)
         return true
     }
 
@@ -840,6 +844,7 @@ class PlayerService : MediaSessionService() {
             currentPlayer.removeAnalyticsListener(startupAnalyticsListener)
             session.player = nextPlayer
             currentPlayer.release()
+            applyAmbienceModeToPlayer(nextPlayer)
             return
         }
 
@@ -886,6 +891,15 @@ class PlayerService : MediaSessionService() {
         currentPlayer.stop()
         currentPlayer.release()
         videoEffectsCoordinator.updateAvailability(nextPlayer)
+        applyAmbienceModeToPlayer(nextPlayer)
+    }
+
+    private fun applyAmbienceModeToPlayer(player: ExoPlayer?) {
+        videoEffectsCoordinator.setAmbientMode(
+            player = player,
+            isEnabled = isAmbienceModeEnabled,
+            targetAspectRatio = ambienceTargetAspectRatio,
+        )
     }
 
     private fun isHardwareVideoDecoderError(error: PlaybackException): Boolean {
@@ -1471,6 +1485,16 @@ class PlayerService : MediaSessionService() {
 
                 CustomCommands.PREVIEW_VIDEO_FILTERS -> {
                     videoEffectsCoordinator.preview(mediaSession?.player as? ExoPlayer, args.toPlayerPreferences())
+                    return@future SessionResult(SessionResult.RESULT_SUCCESS)
+                }
+
+                CustomCommands.SET_AMBIENCE_MODE_ENABLED -> {
+                    isAmbienceModeEnabled = args.getBoolean(CustomCommands.IS_AMBIENCE_MODE_ENABLED_KEY)
+                    val targetAspectRatio = args.getFloat(CustomCommands.AMBIENCE_TARGET_ASPECT_RATIO_KEY, 0f)
+                    ambienceTargetAspectRatio = targetAspectRatio
+                        .takeIf { it.isFinite() && it > 0f }
+                        ?: DEFAULT_AMBIENCE_TARGET_ASPECT_RATIO
+                    applyAmbienceModeToPlayer(mediaSession?.player as? ExoPlayer)
                     return@future SessionResult(SessionResult.RESULT_SUCCESS)
                 }
 
