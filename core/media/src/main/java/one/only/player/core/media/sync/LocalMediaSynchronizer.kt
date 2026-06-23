@@ -340,17 +340,20 @@ class LocalMediaSynchronizer @Inject constructor(
             sortOrder = null,
         )
         val indexedPaths = mediaStoreVideos.map { mediaVideo -> mediaVideo.data.canonicalPathOrSelf() }.toSet()
-        val manualVideos = if (hasManageExternalStorageAccess()) {
+        val unindexedPaths = if (hasManageExternalStorageAccess()) {
             directory.collectVisibleUnindexedVideoPaths(indexedPaths)
-                .asSequence()
-                .map(::File)
-                .filter(File::exists)
-                .filter { it.isVisibleVideoFile() }
-                .map { it.toBasicMediaVideo() }
-                .toList()
         } else {
             emptyList()
         }
+        registerUnindexedPaths(unindexedPaths)
+
+        val manualVideos = unindexedPaths
+            .asSequence()
+            .map(::File)
+            .filter(File::exists)
+            .filter { it.isVisibleVideoFile() }
+            .map { it.toBasicMediaVideo() }
+            .toList()
         val media = (mediaStoreVideos + manualVideos)
             .distinctBy { mediaVideo -> mediaVideo.data.canonicalPathOrSelf() }
 
