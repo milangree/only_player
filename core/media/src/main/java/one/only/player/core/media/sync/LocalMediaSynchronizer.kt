@@ -92,6 +92,20 @@ class LocalMediaSynchronizer @Inject constructor(
         didScan
     }
 
+    override suspend fun removeDeleted(uris: List<String>) = withContext(dispatcher) {
+        val distinctUris = uris.distinct()
+        if (distinctUris.isEmpty()) return@withContext
+        mediumDao.delete(distinctUris)
+        mediumStateDao.delete(distinctUris)
+        distinctUris.forEach { uri ->
+            runCatching {
+                imageLoader.diskCache?.remove(uri)
+            }.onFailure { throwable ->
+                Logger.error(TAG, "Failed to clear thumbnail cache for ${uri.toPrivateLogSummary()}", throwable)
+            }
+        }
+    }
+
     override suspend fun registerManualVideoPath(path: String) {
         if (path.isBlank()) return
 

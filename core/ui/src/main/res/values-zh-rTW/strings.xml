@@ -367,6 +367,12 @@
     <string name="delete_items">刪除 %1$d 個項目？</string>
     <string name="delete_item_info">將會永久刪除選取項目，這個動作無法復原</string>
     <string name="delete_items_info">將會永久刪除選取項目，這個動作無法復原</string>
+    <string name="delete_summary_count">檔案數：%1$d</string>
+    <string name="delete_summary_size">總大小：%1$s</string>
+    <string name="delete_summary_duration">總時長：%1$s</string>
+    <string name="delete_summary_more">還有 %1$d 個檔案</string>
+    <string name="delete_success">檔案已刪除</string>
+    <string name="delete_failed">檔案刪除失敗</string>
     <string name="gestures">手勢</string>
     <string name="swipe_gestures">滑動手勢</string>
     <string name="tap_gestures">點擊手勢</string>
@@ -469,6 +475,7 @@
     <string name="restore_settings_failed">還原設定失敗</string>
     <string name="move_to_recycle_bin">回收站</string>
     <string name="move_to_recycle_bin_info">選取的項目將移至回收站</string>
+    <string name="move_to_recycle_bin_success">檔案已移至回收站</string>
     <string name="move">移動</string>
     <string name="move_here">移動到此處</string>
     <string name="moving">移動中…</string>

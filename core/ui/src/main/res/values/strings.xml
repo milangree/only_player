@@ -376,6 +376,12 @@
     <string name="delete_items">Delete %1$d items?</string>
     <string name="delete_item_info">This action cannot be undone. The selected item will be permanently deleted</string>
     <string name="delete_items_info">This action cannot be undone. The selected items will be permanently deleted</string>
+    <string name="delete_summary_count">Files: %1$d</string>
+    <string name="delete_summary_size">Total size: %1$s</string>
+    <string name="delete_summary_duration">Total duration: %1$s</string>
+    <string name="delete_summary_more">And %1$d more</string>
+    <string name="delete_success">Files deleted</string>
+    <string name="delete_failed">Failed to delete files</string>
     <string name="gestures">Gestures</string>
     <string name="swipe_gestures">Swipe gestures</string>
     <string name="tap_gestures">Tap gestures</string>
@@ -478,6 +484,7 @@
     <string name="restore_settings_failed">Failed to restore settings</string>
     <string name="move_to_recycle_bin">Move to recycle bin</string>
     <string name="move_to_recycle_bin_info">The selected items will be moved to recycle bin</string>
+    <string name="move_to_recycle_bin_success">Files moved to recycle bin</string>
     <string name="move">Move</string>
     <string name="move_here">Move here</string>
     <string name="moving">Moving…</string>

@@ -1,6 +1,7 @@
 package one.only.player.feature.videopicker.screens.search
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -51,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -116,6 +118,7 @@ internal fun SearchScreen(
     onVideoClick: (Video, List<Video>) -> Unit = { _, _ -> },
     onEvent: (SearchUiEvent) -> Unit = {},
 ) {
+    val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val selectionManager = rememberSelectionManager()
@@ -137,6 +140,12 @@ internal fun SearchScreen(
     val selectedVideoUris = selectionManager.allSelectedVideos.map { it.uriString }.distinct()
     val selectedItemsSize = selectionManager.selectedFolders.size + selectionManager.selectedVideos.size
     val totalItemsSize = rootFolder.folderList.size + rootFolder.mediaList.size
+    val deleteResultMessage = when (uiState.deleteResult) {
+        SearchDeleteResult.Deleted -> stringResource(R.string.delete_success)
+        SearchDeleteResult.MovedToRecycleBin -> stringResource(R.string.move_to_recycle_bin_success)
+        SearchDeleteResult.DeleteFailed -> stringResource(R.string.delete_failed)
+        null -> null
+    }
     val cacheAndOpenFolder: (Folder) -> Unit = { folder ->
         onEvent(SearchUiEvent.CacheFolderSnapshot(folder))
         onFolderClick(folder)
@@ -144,6 +153,12 @@ internal fun SearchScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    LaunchedEffect(deleteResultMessage) {
+        val message = deleteResultMessage ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        onEvent(SearchUiEvent.ClearDeleteResult)
     }
 
     Scaffold(
