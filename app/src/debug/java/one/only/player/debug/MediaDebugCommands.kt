@@ -6,7 +6,9 @@ import androidx.core.net.toUri
 import dagger.hilt.android.EntryPointAccessors
 import java.io.File
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import one.only.player.core.common.Logger
 import one.only.player.core.data.repository.MediaMoveSummary
 import one.only.player.core.data.repository.MediaRepository
 import one.only.player.core.model.Video
@@ -149,10 +151,26 @@ private suspend fun DebugCommandEntryPoint.runMediaAction(
         }
         "scan_path" -> {
             val path = extras.requiredMediaTarget()
-            val didRefresh = mediaSynchronizer().refresh(path)
+            if (!File(path).exists()) {
+                return debugResult(
+                    isOk = false,
+                    message = "Path not found: $path",
+                    command = command,
+                    target = action,
+                    value = path,
+                )
+            }
+
+            applicationScope().launch {
+                runCatching {
+                    mediaSynchronizer().refresh(path)
+                }.onFailure { throwable ->
+                    Logger.error("MediaDebugCommands", "Failed to refresh scanned path: $path", throwable)
+                }
+            }
             debugResult(
-                isOk = didRefresh,
-                message = "Scanned path ${if (didRefresh) "succeeded" else "failed"}: $path",
+                isOk = true,
+                message = "Scan path refresh started: $path",
                 command = command,
                 target = action,
                 value = path,
