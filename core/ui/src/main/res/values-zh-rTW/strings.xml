@@ -116,7 +116,7 @@
     <string name="location">地點</string>
     <string name="subtitle_font">字幕字型</string>
     <string name="external_subtitle_font_import">匯入外部字幕字型</string>
-    <string name="external_subtitle_font_import_desc">匯入一個用於一般文字字幕的 .ttf 或 .otf 字型檔</string>
+    <string name="external_subtitle_font_import_desc">匯入一個或多個 .ttf 或 .otf 字幕字型檔案</string>
     <string name="external_subtitle_font_current">目前匯入字型</string>
     <string name="external_subtitle_font_not_imported">未匯入</string>
     <string name="external_subtitle_font_clear">清除匯入字幕字型</string>

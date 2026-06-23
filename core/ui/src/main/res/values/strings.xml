@@ -162,7 +162,7 @@
     <string name="serif">Serif</string>
     <string name="subtitle_font">Subtitle font</string>
     <string name="external_subtitle_font_import">Import external subtitle font</string>
-    <string name="external_subtitle_font_import_desc">Import one .ttf or .otf file for plain text subtitles</string>
+    <string name="external_subtitle_font_import_desc">Import one or more .ttf or .otf subtitle font files</string>
     <string name="external_subtitle_font_current">Current imported font</string>
     <string name="external_subtitle_font_not_imported">Not imported</string>
     <string name="external_subtitle_font_clear">Clear imported subtitle font</string>

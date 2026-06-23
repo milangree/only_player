@@ -380,8 +380,22 @@ val Context.externalSubtitleFontDir: File
 val Context.externalSubtitleFontFile: File
     get() = File(externalSubtitleFontDir, "current.font")
 
+val Context.externalSubtitleFontFilesDir: File
+    get() {
+        val dir = File(externalSubtitleFontDir, "fonts")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
 val Context.externalSubtitleFontTempFile: File
     get() = File(externalSubtitleFontDir, "importing.font")
+
+val Context.externalSubtitleFontTempDir: File
+    get() {
+        val dir = File(externalSubtitleFontDir, "importing")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
 
 val Context.externalSubtitleFontMetaFile: File
     get() = File(externalSubtitleFontDir, "current.json")
