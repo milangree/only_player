@@ -171,6 +171,7 @@ internal fun CloudBrowseScreen(
     var selectedFilePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     var shouldShowSelectionMenu by remember { mutableStateOf(false) }
     var shouldShowQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    var shouldShowEditServerDialog by remember { mutableStateOf(false) }
     var restoredDirectoryPath by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedItemsSize = selectedFilePaths.size
     val totalItemsSize = uiState.files.size
@@ -330,6 +331,15 @@ internal fun CloudBrowseScreen(
                                 contentDescription = stringResource(R.string.cloud_quick_settings),
                             )
                         }
+                        IconButton(
+                            onClick = { shouldShowEditServerDialog = true },
+                            modifier = Modifier.testTag("btn_cloud_edit_server"),
+                        ) {
+                            Icon(
+                                imageVector = NextIcons.Edit,
+                                contentDescription = stringResource(R.string.edit_server_settings),
+                            )
+                        }
                     }
                 },
             )
@@ -438,6 +448,22 @@ internal fun CloudBrowseScreen(
             onDismiss = { shouldShowQuickSettingsDialog = false },
             updatePreferences = { onEvent(CloudBrowseEvent.UpdateQuickSettings(it)) },
         )
+    }
+
+    if (shouldShowEditServerDialog) {
+        uiState.server?.let { server ->
+            AddEditServerDialog(
+                server = server,
+                pinned = server.id in uiState.preferences.pinnedCloudServerIds,
+                onDismiss = {
+                    shouldShowEditServerDialog = false
+                },
+                onSave = { updated, _ ->
+                    onEvent(CloudBrowseEvent.UpdateServer(updated))
+                    shouldShowEditServerDialog = false
+                },
+            )
+        }
     }
 }
 

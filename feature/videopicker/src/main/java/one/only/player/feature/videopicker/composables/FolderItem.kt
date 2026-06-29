@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +45,7 @@ import one.only.player.core.model.Folder
 import one.only.player.core.model.MediaLayoutMode
 import one.only.player.core.ui.R
 import one.only.player.core.ui.components.NextSegmentedListItem
+import one.only.player.core.ui.designsystem.NextIcons
 import one.only.player.core.ui.theme.OnlyPlayerTheme
 
 @Composable
@@ -53,6 +57,7 @@ fun FolderItem(
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
     isSelected: Boolean = false,
+    isCloudBadge: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     onThumbnailClick: (() -> Unit)? = null,
@@ -66,6 +71,7 @@ fun FolderItem(
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
             isSelected = isSelected,
+            isCloudBadge = isCloudBadge,
             onClick = onClick,
             onLongClick = onLongClick,
             onThumbnailClick = onThumbnailClick,
@@ -78,6 +84,7 @@ fun FolderItem(
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
             isSelected = isSelected,
+            isCloudBadge = isCloudBadge,
             onClick = onClick,
             onLongClick = onLongClick,
             onThumbnailClick = onThumbnailClick,
@@ -95,6 +102,7 @@ private fun FolderListItem(
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
     isSelected: Boolean = false,
+    isCloudBadge: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     onThumbnailClick: (() -> Unit)? = null,
@@ -142,7 +150,13 @@ private fun FolderListItem(
                             .aspectRatio(20 / 17f),
                     )
 
-                    if (preferences.shouldShowDurationField) {
+                    if (isCloudBadge) {
+                        CloudBadge(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(5.dp),
+                        )
+                    } else if (preferences.shouldShowDurationField) {
                         InfoChip(
                             text = Utils.formatDurationMillis(folder.mediaDuration),
                             modifier = Modifier
@@ -213,6 +227,7 @@ private fun FolderGridItem(
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
     isSelected: Boolean = false,
+    isCloudBadge: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     onThumbnailClick: (() -> Unit)? = null,
@@ -266,7 +281,13 @@ private fun FolderGridItem(
                             .aspectRatio(20 / 17f),
                     )
 
-                    if (preferences.shouldShowDurationField) {
+                    if (isCloudBadge) {
+                        CloudBadge(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(5.dp),
+                        )
+                    } else if (preferences.shouldShowDurationField) {
                         InfoChip(
                             text = Utils.formatDurationMillis(folder.mediaDuration),
                             modifier = Modifier
@@ -313,7 +334,7 @@ private fun FolderGridItem(
                                 append(it)
                                 folderCount?.let {
                                     append(", ")
-                                    append("\u00A0")
+                                    append(" ")
                                 }
                             }
                             folderCount?.let {
@@ -328,6 +349,24 @@ private fun FolderGridItem(
             }
         },
     )
+}
+
+@Composable
+private fun CloudBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = NextIcons.Cloud,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(14.dp),
+        )
+    }
 }
 
 @Composable

@@ -95,6 +95,7 @@ internal fun CloudHomeScreen(
     var shouldShowAddDialog by rememberSaveable { mutableStateOf(false) }
     var editingServer: RemoteServer? by remember { mutableStateOf(null) }
     var deletingServer: RemoteServer? by remember { mutableStateOf(null) }
+    var editingShowOnHomeScreen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -153,15 +154,21 @@ internal fun CloudHomeScreen(
                     ) {
                         items(uiState.servers, key = { it.id }) { server ->
                             val index = uiState.servers.indexOf(server)
+                            val isPinned = server.id in uiState.pinnedServerIds
                             ServerListItem(
                                 server = server,
-                                isPinned = server.id in uiState.pinnedServerIds,
+                                isPinned = isPinned,
                                 isFirstItem = index == 0,
                                 isLastItem = index == uiState.servers.lastIndex,
                                 onClick = { onServerClick(server.id) },
-                                onEditClick = { editingServer = server },
+                                onTogglePinned = {
+                                    onEvent(CloudHomeEvent.TogglePinnedServer(server.id, !isPinned))
+                                },
+                                onEditClick = {
+                                    editingServer = server
+                                    editingShowOnHomeScreen = isPinned
+                                },
                                 onDeleteClick = { deletingServer = server },
-                                onPinClick = { onEvent(CloudHomeEvent.TogglePinServer(server.id)) },
                             )
                         }
                     }
@@ -173,9 +180,10 @@ internal fun CloudHomeScreen(
     if (shouldShowAddDialog) {
         AddEditServerDialog(
             server = null,
+            pinned = false,
             onDismiss = { shouldShowAddDialog = false },
-            onSave = { server ->
-                onEvent(CloudHomeEvent.SaveServer(server))
+            onSave = { server, showOnHomeScreen ->
+                onEvent(CloudHomeEvent.SaveServer(server, showOnHomeScreen))
                 shouldShowAddDialog = false
             },
         )
@@ -184,10 +192,15 @@ internal fun CloudHomeScreen(
     editingServer?.let { server ->
         AddEditServerDialog(
             server = server,
-            onDismiss = { editingServer = null },
-            onSave = { updated ->
-                onEvent(CloudHomeEvent.SaveServer(updated))
+            pinned = editingShowOnHomeScreen,
+            onDismiss = {
                 editingServer = null
+                editingShowOnHomeScreen = false
+            },
+            onSave = { updated, showOnHomeScreen ->
+                onEvent(CloudHomeEvent.SaveServer(updated, showOnHomeScreen))
+                editingServer = null
+                editingShowOnHomeScreen = false
             },
         )
     }
@@ -252,9 +265,9 @@ private fun ServerListItem(
     isFirstItem: Boolean,
     isLastItem: Boolean,
     onClick: () -> Unit,
+    onTogglePinned: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onPinClick: () -> Unit,
 ) {
     NextSegmentedListItem(
         onClick = onClick,
@@ -263,22 +276,17 @@ private fun ServerListItem(
         contentPadding = PaddingValues(8.dp),
         modifier = Modifier.testTag("cloud_server_item_${server.id}"),
         leadingContent = {
-            Icon(
-                imageVector = NextIcons.Cloud,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
+            IconButton(onClick = onTogglePinned) {
+                Icon(
+                    imageVector = if (isPinned) NextIcons.Visibility else NextIcons.VisibilityOff,
+                    contentDescription = stringResource(
+                        if (isPinned) R.string.remove_from_homescreen else R.string.add_to_homescreen,
+                    ),
+                )
+            }
         },
         trailingContent = {
             Row {
-                IconButton(onClick = onPinClick) {
-                    Icon(
-                        imageVector = if (isPinned) NextIcons.Star else NextIcons.StarBorder,
-                        contentDescription = stringResource(
-                            if (isPinned) R.string.remove_from_homescreen else R.string.add_to_homescreen,
-                        ),
-                    )
-                }
                 IconButton(onClick = onEditClick) {
                     Icon(
                         imageVector = NextIcons.Edit,
@@ -314,10 +322,11 @@ private fun ServerListItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddEditServerDialog(
+internal fun AddEditServerDialog(
     server: RemoteServer?,
+    pinned: Boolean,
     onDismiss: () -> Unit,
-    onSave: (RemoteServer) -> Unit,
+    onSave: (RemoteServer, Boolean) -> Unit,
 ) {
     val isEditing = server != null
     var name by rememberSaveable { mutableStateOf(server?.name ?: "") }
@@ -331,6 +340,7 @@ private fun AddEditServerDialog(
     var proxyHost by rememberSaveable { mutableStateOf(server?.proxyHost ?: "") }
     var proxyPort by rememberSaveable { mutableStateOf(server?.proxyPort?.toString() ?: "") }
     var isProtocolExpanded by rememberSaveable { mutableStateOf(false) }
+    var showOnHomeScreen by rememberSaveable { mutableStateOf(pinned) }
 
     NextDialog(
         onDismissRequest = onDismiss,
@@ -462,6 +472,16 @@ private fun AddEditServerDialog(
                         )
                     }
                 }
+
+                PreferenceSwitch(
+                    title = stringResource(R.string.show_on_home_screen),
+                    description = stringResource(R.string.show_on_home_screen),
+                    icon = if (showOnHomeScreen) NextIcons.Visibility else NextIcons.VisibilityOff,
+                    isChecked = showOnHomeScreen,
+                    onClick = { showOnHomeScreen = !showOnHomeScreen },
+                    isFirstItem = true,
+                    isLastItem = true,
+                )
             }
         },
         confirmButton = {
@@ -481,7 +501,7 @@ private fun AddEditServerDialog(
                         proxyHost = proxyHost.trim(),
                         proxyPort = proxyPort.toIntOrNull(),
                     )
-                    onSave(result)
+                    onSave(result, showOnHomeScreen)
                 },
             ) {
                 Text(stringResource(R.string.save))

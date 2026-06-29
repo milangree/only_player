@@ -50,6 +50,7 @@ fun MediaView(
     lazyGridState: LazyGridState = rememberLazyGridState(),
     pinnedServers: List<RemoteServer> = emptyList(),
     onPinnedServerClick: (Long) -> Unit = {},
+    onPinnedServerRemove: (Long) -> Unit = {},
     onFolderClick: (Folder) -> Unit,
     onVideoClick: (Video) -> Unit,
     onVideoLoaded: (Uri) -> Unit,
@@ -102,8 +103,15 @@ fun MediaView(
                     key = { _, server -> "pinned_server_${server.id}" },
                     span = { _, _ -> GridItemSpan(singleFolderSpan) },
                 ) { _, server ->
-                    PinnedServerItem(
-                        server = server,
+                    FolderItem(
+                        folder = Folder(
+                            name = server.name.ifBlank { server.host },
+                            path = "cloud://${server.id}",
+                            dateModified = 0,
+                        ),
+                        isRecentlyPlayedFolder = false,
+                        preferences = preferences,
+                        isCloudBadge = true,
                         onClick = { onPinnedServerClick(server.id) },
                     )
                 }

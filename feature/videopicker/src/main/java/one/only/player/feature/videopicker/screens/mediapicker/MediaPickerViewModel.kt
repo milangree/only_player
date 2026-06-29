@@ -175,6 +175,15 @@ class MediaPickerViewModel @Inject constructor(
             is MediaPickerUiEvent.UpdateMenu -> updateMenu(event.preferences)
             is MediaPickerUiEvent.CacheFolderSnapshot -> cacheFolderSnapshot(event.folder)
             MediaPickerUiEvent.ClearDeleteResult -> clearDeleteResult()
+            is MediaPickerUiEvent.RemovePinnedServer -> removePinnedServer(event.serverId)
+        }
+    }
+
+    private fun removePinnedServer(serverId: Long) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(pinnedCloudServerIds = it.pinnedCloudServerIds - serverId)
+            }
         }
     }
 
@@ -457,6 +466,7 @@ sealed interface MediaPickerUiEvent {
     data class UpdateMenu(val preferences: ApplicationPreferences) : MediaPickerUiEvent
     data class CacheFolderSnapshot(val folder: Folder) : MediaPickerUiEvent
     data object ClearDeleteResult : MediaPickerUiEvent
+    data class RemovePinnedServer(val serverId: Long) : MediaPickerUiEvent
 }
 
 sealed interface MediaPickerDeleteResult {

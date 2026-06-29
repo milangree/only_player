@@ -94,6 +94,8 @@ import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 
 object NextIcons {
     val Add = Icons.Rounded.Add
@@ -190,4 +192,6 @@ object NextIcons {
     val Screenshot = Icons.Rounded.PhotoCamera
     val Star = Icons.Rounded.Star
     val StarBorder = Icons.Rounded.StarBorder
+    val Visibility = Icons.Rounded.Visibility
+    val VisibilityOff = Icons.Rounded.VisibilityOff
 }

@@ -596,6 +596,7 @@ internal fun MediaPickerScreen(
                                         preferences = uiState.preferences,
                                         pinnedServers = uiState.pinnedCloudServers,
                                         onPinnedServerClick = onCloudServerClick,
+                                        onPinnedServerRemove = { serverId -> onEvent(MediaPickerUiEvent.RemovePinnedServer(serverId)) },
                                         onFolderClick = {
                                             onEvent(MediaPickerUiEvent.CacheFolderSnapshot(it))
                                             onFolderClick(it.path, uiState.screenMode)

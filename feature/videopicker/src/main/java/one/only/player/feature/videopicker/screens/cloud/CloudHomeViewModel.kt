@@ -25,10 +25,9 @@ class CloudHomeViewModel @Inject constructor(
         repository.getAll(),
         preferencesRepository.applicationPreferences,
     ) { servers, preferences ->
-        val pinnedIds = preferences.pinnedCloudServerIds
         CloudHomeUiState(
             servers = servers,
-            pinnedServerIds = pinnedIds,
+            pinnedServerIds = preferences.pinnedCloudServerIds,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -38,18 +37,38 @@ class CloudHomeViewModel @Inject constructor(
 
     fun onEvent(event: CloudHomeEvent) {
         when (event) {
-            is CloudHomeEvent.SaveServer -> saveServer(event.server)
+            is CloudHomeEvent.SaveServer -> saveServer(event.server, event.showOnHomeScreen)
             is CloudHomeEvent.DeleteServer -> deleteServer(event.id)
-            is CloudHomeEvent.TogglePinServer -> togglePinServer(event.id)
+            is CloudHomeEvent.TogglePinnedServer -> togglePinnedServer(event.serverId, event.showOnHomeScreen)
         }
     }
 
-    private fun saveServer(server: RemoteServer) {
+    private fun saveServer(server: RemoteServer, showOnHomeScreen: Boolean) {
         viewModelScope.launch {
-            if (server.id == 0L) {
+            val serverId = if (server.id == 0L) {
                 repository.insert(server)
             } else {
                 repository.update(server)
+                server.id
+            }
+            preferencesRepository.updateApplicationPreferences { prefs ->
+                if (showOnHomeScreen) {
+                    prefs.copy(pinnedCloudServerIds = prefs.pinnedCloudServerIds + serverId)
+                } else {
+                    prefs.copy(pinnedCloudServerIds = prefs.pinnedCloudServerIds - serverId)
+                }
+            }
+        }
+    }
+
+    private fun togglePinnedServer(serverId: Long, showOnHomeScreen: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { prefs ->
+                if (showOnHomeScreen) {
+                    prefs.copy(pinnedCloudServerIds = prefs.pinnedCloudServerIds + serverId)
+                } else {
+                    prefs.copy(pinnedCloudServerIds = prefs.pinnedCloudServerIds - serverId)
+                }
             }
         }
     }
@@ -62,19 +81,6 @@ class CloudHomeViewModel @Inject constructor(
             }
         }
     }
-
-    private fun togglePinServer(id: Long) {
-        viewModelScope.launch {
-            preferencesRepository.updateApplicationPreferences { preferences ->
-                val pinnedIds = preferences.pinnedCloudServerIds
-                if (id in pinnedIds) {
-                    preferences.copy(pinnedCloudServerIds = pinnedIds - id)
-                } else {
-                    preferences.copy(pinnedCloudServerIds = pinnedIds + id)
-                }
-            }
-        }
-    }
 }
 
 @Stable
@@ -84,9 +90,9 @@ data class CloudHomeUiState(
 )
 
 sealed interface CloudHomeEvent {
-    data class SaveServer(val server: RemoteServer) : CloudHomeEvent
+    data class SaveServer(val server: RemoteServer, val showOnHomeScreen: Boolean) : CloudHomeEvent
     data class DeleteServer(val id: Long) : CloudHomeEvent
-    data class TogglePinServer(val id: Long) : CloudHomeEvent
+    data class TogglePinnedServer(val serverId: Long, val showOnHomeScreen: Boolean) : CloudHomeEvent
 }
 
 // 新建服务器的默认模板
